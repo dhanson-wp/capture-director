@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { zoomPlan, piecewise } from '../src/effects.js';
-import { normalizeStep } from '../src/record.js';
+import { normalizeStep, pageStyles } from '../src/record.js';
 import { execFileSync } from 'node:child_process';
 
 const frame = { W: 1920, H: 1080, duration: 12 };
@@ -55,4 +55,12 @@ test('camera moves push in from when they are logged and hold to the end', () =>
 	assert.equal(plan.transitions[0].t0, 3);
 	assert.equal(plan.transitions[0].t1, 7);
 	assert.equal(plan.transitions[0].to.z, 1.4);
+});
+
+test('page styles hide WordPress bars and scrollbars unless turned off', () => {
+	const css = pageStyles({});
+	assert.match(css, /#atomic-proxy-bar/);
+	assert.match(css, /::-webkit-scrollbar/);
+	assert.doesNotMatch(pageStyles({ hideWpBars: false }), /#atomic-proxy-bar/);
+	assert.equal(pageStyles({ hideWpBars: false, hideScrollbars: false }), '');
 });

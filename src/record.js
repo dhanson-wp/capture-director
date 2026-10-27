@@ -256,6 +256,15 @@ class Session {
 	}
 }
 
+// CSS applied to every page a shot loads, including pages reached by clicking.
+export function pageStyles(shot) {
+	let css = '';
+	// WordPress.com sites can show these bars to logged-out visitors on Automattic's proxy.
+	if (shot.hideWpBars !== false) css += '#wpadminbar,#atomic-proxy-bar{display:none!important}html,body{margin-top:0!important}';
+	if (shot.hideScrollbars !== false) css += '::-webkit-scrollbar{display:none!important}html{scrollbar-width:none!important}';
+	return css;
+}
+
 export async function recordShot(browser, shot, dir) {
 	const frameDir = path.join(dir, 'frames');
 	await rm(frameDir, { recursive: true, force: true });
@@ -267,18 +276,29 @@ export async function recordShot(browser, shot, dir) {
 		colorScheme: shot.colorScheme,
 		reducedMotion: shot.reducedMotion,
 	});
+	// An init script rather than addStyleTag, so the styles survive navigation. A bar that
+	// appears late on a second page would otherwise shift the layout under the next click.
+	// Client-side routers (WordPress's Interactivity API router, for one) swap pages in place
+	// and disable stylesheets the next page doesn't list, so the style re-enables itself.
+	const css = pageStyles(shot);
+	if (css) {
+		await context.addInitScript((text) => {
+			const style = document.createElement('style');
+			style.textContent = text;
+			const keep = () => {
+				if (!document.documentElement) return;
+				if (!style.isConnected) document.documentElement.appendChild(style);
+				if (style.disabled) style.disabled = false;
+			};
+			keep();
+			new MutationObserver(keep).observe(document, { childList: true, subtree: true });
+		}, css);
+	}
 	const page = await context.newPage();
 	const s = new Session(page, shot);
 
 	log(`${shot.id}: loading ${shot.url}`);
 	await page.goto(shot.url, { waitUntil: shot.waitUntil ?? 'networkidle', timeout: 60000 });
-	// WordPress.com sites can show these bars to logged-out visitors on Automattic's proxy.
-	if (shot.hideWpBars !== false) {
-		await page.addStyleTag({ content: '#wpadminbar,#atomic-proxy-bar{display:none!important}html,body{margin-top:0!important}' });
-	}
-	if (shot.hideScrollbars !== false) {
-		await page.addStyleTag({ content: '::-webkit-scrollbar{display:none!important}html{scrollbar-width:none!important}' });
-	}
 	for (const raw of shot.setup || []) await s.setup(normalizeStep(raw));
 	// Park the pointer only when the shot uses it. A pointer resting on the page
 	// can trigger hover states, such as a carousel that pauses under the pointer.

@@ -87,7 +87,7 @@ Per shot, or in `defaults`:
 | `zoom` | see below | Auto-zoom settings; `false` turns it off |
 | `colorScheme` | | `light` or `dark` |
 | `waitUntil` | `networkidle` | Page load condition |
-| `hideWpBars` | `true` | Hides the WordPress admin bar and the `#atomic-proxy-bar`, which some WordPress.com setups show even to logged-out visitors |
+| `hideWpBars` | `true` | Hides the WordPress admin bar and the `#atomic-proxy-bar`, which some WordPress.com setups show even to logged-out visitors, on every page the shot visits |
 
 Zoom settings: `level` (1.6), `max` (2.0), `on` (`[click, hover]`), `lead` (0.25 s; how early the zoom finishes before the click), `ramp` (0.9 s in), `rampOut` (1.0 s out), `hold` (1.4 s after the last click before zooming out), `pan` (0.7 s between clicks in one zoom), `gap` (0.6 s; zooms closer than this merge into one), and `padding` (0.12, around a `zoomOn` box). Clicks that land close together stay zoomed in and pan between targets, which is how Screen Studio feels.
 
