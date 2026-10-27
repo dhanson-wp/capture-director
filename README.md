@@ -4,9 +4,9 @@ I wanted Screen Studio-style demo clips of a website without sitting there drivi
 
 It runs locally. Nothing gets uploaded anywhere.
 
-[![A 31 second capture-director video of derekhanson.blog: clicking through the archive tabs, then a note, a link, a photo post, and the follow page](docs/demo-poster.png)](docs/demo.mp4)
+https://github.com/user-attachments/assets/7dd927e2-ffc4-4c9b-ae6e-c7b4bf5049b5
 
-Here's what it made from one shot list and one timeline: a 31 second tour of the new post formats on my blog, with eased zooms, a synthetic cursor, captions, and cards. Click the image to play it.
+Here's what it made from one shot list and one timeline: a 31 second tour of the new post formats on my blog, with eased zooms, a synthetic cursor, captions, and cards.
 
 ## What you need
 
