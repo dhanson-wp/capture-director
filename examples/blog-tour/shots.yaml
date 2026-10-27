@@ -1,0 +1,41 @@
+# A short tour of a WordPress blog: menu hover, scroll, and a click into a post.
+# Swap the URLs and selectors for any site.
+out: out
+
+defaults:
+  viewport: { width: 1440, height: 810 }
+  scale: 1.3333333
+
+shots:
+  - id: home
+    url: https://derekhanson.blog/
+    cursor: { start: [1100, 620] }
+    setup:
+      - waitForImages: true
+      - wait: 1000
+    actions:
+      - wait: 1200
+      - hover: "text=Writing"
+        zoom: 1.5
+        hold: 1800
+      - move: [1100, 560]
+        duration: 900
+      - scroll: { to: "text=Recent posts", block: start, duration: 2200 }
+      - wait: 700
+      - click: "text=Why I’m simplifying my AI workflow"
+        zoom: 1.6
+        hold: 2600
+    tail: 600
+
+  - id: post
+    url: https://derekhanson.blog/simplifying-my-ai-workflow/
+    cursor: false
+    zoom: false
+    setup:
+      - waitForImages: true
+      - wait: 800
+    actions:
+      - wait: 1500
+      - scroll: { by: 900, duration: 5000 }
+      - wait: 1200
+    tail: 300

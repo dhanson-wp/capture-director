@@ -1,0 +1,22 @@
+# Assemble the tour: a title card, the two clips, and an end card.
+output: out/blog-tour.mp4
+size: 1920x1080
+fps: 30
+
+card: { background: "#151515", color: "#f2efe9" }
+caption: { position: bottom-left, opacity: 0.8, size: 28, plate: "rgba(21,21,21,0.75)" }
+transition: { type: fade, duration: 0.6 }
+fade: { in: 0.5, out: 1.0 }
+
+items:
+  - card:
+      kicker: derekhanson.blog
+      title: A block building playground
+      duration: 2.5
+  - clip: out/home/home.mp4
+    caption: Writing, notes, and projects
+  - clip: out/post/post.mp4
+    caption: { text: Long-form posts, end: 4 }
+  - end:
+      title: derekhanson.blog
+      duration: 3
