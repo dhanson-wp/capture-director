@@ -4,7 +4,7 @@ I wanted Screen Studio-style demo clips of a website without sitting there drivi
 
 It runs locally. Nothing gets uploaded anywhere.
 
-https://github.com/user-attachments/assets/7dd927e2-ffc4-4c9b-ae6e-c7b4bf5049b5
+https://github.com/user-attachments/assets/9b76dea2-7330-4a5d-ae31-57a5bec42116
 
 Here's what it made from one shot list and one timeline: a 31 second tour of the new post formats on my blog, with eased zooms, a synthetic cursor, captions, and cards.
 
