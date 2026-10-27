@@ -3,6 +3,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { launch, renderCard, renderCaption } from './browser.js';
+import { remember } from './library.js';
 import { ffmpeg, finite, loadYaml, localFile, log, num, outputPath, parseSize, probe, resolveFrom } from './util.js';
 
 const VIDEO = ['.mp4', '.mov', '.m4v'];
@@ -152,6 +153,7 @@ export async function render(file, { output } = {}) {
 	]);
 	const info = await probe(out);
 	log(`render: wrote ${out} (${info.width}x${info.height}, ${info.duration.toFixed(2)}s${info.hasAudio ? ', with music' : ''})`);
+	await remember(out, { kind: 'video', title: tl.title, project: tl.project || path.basename(path.dirname(path.resolve(file))), source: file });
 	return { file: out, ...info, items: items.map((it) => ({ label: it.label, duration: Number(it.duration.toFixed(2)) })) };
 }
 

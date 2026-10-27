@@ -3,6 +3,7 @@
 import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 import { recordShot, withBrowser } from './record.js';
+import { remember } from './library.js';
 import { renderCursor } from './browser.js';
 import { zoomPlan, zoomFilter, cursorExprs, pressedEnable, ZOOM_DEFAULTS } from './effects.js';
 import { ffmpeg, finite, loadYaml, log, merge, parseSize, probe, resolveFrom, safeId } from './util.js';
@@ -30,6 +31,8 @@ export async function loadShots(file) {
 	const shots = (doc.shots || []).map((s, i) => {
 		const shot = merge(defaults, s);
 		shot.id = safeId(s.id || `shot-${i + 1}`);
+		shot.source = file;
+		shot.project = doc.project || path.basename(path.dirname(path.resolve(file)));
 		if (typeof shot.zoom === 'boolean') shot.zoom = { ...defaults.zoom, enabled: shot.zoom };
 		if (typeof shot.cursor === 'boolean') shot.cursor = { ...defaults.cursor, enabled: shot.cursor };
 		if (!shot.url) throw new Error(`Shot ${shot.id} has no url`);
@@ -141,5 +144,6 @@ export async function processShot(browser, shot, dir) {
 	]);
 	const info = await probe(out);
 	log(`${shot.id}: wrote ${out} (${info.width}x${info.height}, ${info.duration.toFixed(2)}s)`);
+	if (shot.source) await remember(out, { kind: 'clip', title: shot.id, project: shot.project, source: shot.source, shot: shot.id });
 	return { id: shot.id, file: out, ...info, zooms: plan.groups.length };
 }

@@ -72,7 +72,7 @@ When a click changes something far from the button, add `zoomOn: [buttonSelector
 
 ## Shot list reference
 
-Top level: `out` (folder for captures, relative to the YAML file), `defaults` (merged into every shot), and `shots`.
+Top level: `out` (folder for captures, relative to the YAML file), `project` (the library project; defaults to the YAML file's folder name), `defaults` (merged into every shot), and `shots`.
 
 Per shot, or in `defaults`:
 
@@ -162,6 +162,8 @@ capture-director process <shots.yaml> [--only id,id]  # redo zoom and cursor wit
 capture-director render <timeline.yaml> [--out file]  # assemble the final video
 capture-director sheet <video.mp4> [--every 1]        # contact sheet PNG
 capture-director stills <video.mp4> 1.5,4,8           # full-size PNG stills
+capture-director library                              # browse and organize everything you've made
+capture-director library add <folder or video>        # bring in videos made before the library
 ```
 
 If a shot's frames ever come back the wrong size, the recorder stops with an error instead of stretching them. Setting `CD_CHROME_CHANNEL=bundled` switches to Playwright's cached headless shell.
@@ -177,6 +179,16 @@ Every command prints a JSON summary on stdout and progress on stderr, so an agen
 - `zoom-plan.json`: the zoom keyframes it chose
 - `filter.txt`: the exact ffmpeg filter graph, handy when something looks off
 - `<id>.mp4`: the finished clip
+
+## Keeping captures organized
+
+Clips end up wherever each shot list lives, which gets scattered fast. So every clip from `record` and every video from `render` also lands in a library, and `capture-director library` opens it in your browser.
+
+It works a bit like Screen Studio's or Loom's library. Captures show as a grid of thumbnails you can search, sort, and filter to starred, final videos, or clips. Each one belongs to a project (the folder its shot list sits in, until you rename it). Open one to play it, retitle it, move it to another project, star it, jot a note, show it in Finder, or copy the command that records it again. New recordings show up while the library is open.
+
+The library is a list of pointers, kept in `~/.capture-director/library.json`. Your videos stay where they were rendered. "Remove from library" forgets an entry and never touches the file; deleting a video is something you do in Finder.
+
+Already have videos? `capture-director library add ~/Projects/demos` walks a folder and adds every `.mp4`, `.mov`, and `.m4v` it finds. Set `CD_HOME` to keep the library somewhere else, or `CD_NO_LIBRARY=1` to stop `record` and `render` from adding to it.
 
 ## Using it from Claude Code or Codex
 
@@ -197,11 +209,12 @@ For a more designed piece, such as kinetic type, animated end cards, or motion g
 
 ## Safety and privacy
 
-- **Everything runs on your machine.** There's no server, no account, and no telemetry. Nothing is uploaded.
+- **Everything runs on your machine.** There's no server you don't run, no account, and no telemetry. Nothing is uploaded.
 - **The browser starts logged out every time.** Each shot gets a fresh, empty Chrome profile, with no cookies, saved passwords, or extensions from your own browser. You can't accidentally record your admin bar or inbox.
 - **Chrome keeps its sandbox on.** Playwright turns Chrome's sandbox off by default; capture director turns it back on, since it's visiting websites you don't control. Downloads are refused. (`CD_NO_SANDBOX=1` is there for containers that can't run it.)
 - **Network traffic goes only where you point it:** the URLs in your shot list, plus any font URLs in your timeline. Shot URLs must be `http` or `https`, and clips and music must be local files, so ffmpeg never fetches anything.
 - **A shot list is a script.** The `eval` and `css` steps run code inside the page you're recording, and file paths read local files (fonts, music, clips). Read a shot list from someone else before you run it, the same way you'd read a shell script. Within that, the YAML can't reach outside what it describes: values that end up in ffmpeg filter graphs must be plain numbers or known names, shot ids must be plain names, outputs need a video extension, and re-recording only clears the frame files it wrote.
+- **The library stays on your machine.** `capture-director library` listens on `127.0.0.1` only, answers only to its own address, and needs the one-time link printed in your terminal. It can't be reached from your network or driven by other websites, and it never deletes a file.
 - **Two dependencies:** `playwright-core` (it drives your installed Chrome, with no browser download) and `yaml`. `npm audit` reports no known vulnerabilities.
 - **Mind what's on the page.** It records exactly what a logged-out visitor sees. Don't record staging sites or pages with personal data you wouldn't publish.
 
@@ -217,7 +230,7 @@ Videos made with it have no voiceover, so they read fine on mute. Captions are d
 npm test
 ```
 
-The tests cover the zoom planner, step parsing, a check that the generated ffmpeg expressions parse, and the input checks that keep YAML out of the filter graph.
+The tests cover the zoom planner, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules.
 
 ## License
 
