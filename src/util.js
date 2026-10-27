@@ -57,6 +57,34 @@ export function resolveFrom(baseFile, p) {
 	return path.resolve(path.dirname(baseFile), p);
 }
 
+// Like resolveFrom, but only for files on disk. ffmpeg would happily open a URL,
+// and a remote playlist can pull local files into the picture.
+export function localFile(baseFile, p, what) {
+	if (/^[a-z][a-z0-9+.-]*:/i.test(p) && !/^[a-z]:[\\/]/i.test(p)) throw new Error(`${what} must be a local file, not ${p}`);
+	return resolveFrom(baseFile, p);
+}
+
+// Shot ids become folder and file names, so keep them to one plain path segment.
+export function safeId(id) {
+	const s = String(id);
+	if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(s)) throw new Error(`Bad id "${s}": use letters, numbers, dots, dashes, and underscores`);
+	return s;
+}
+
+// A number for an ffmpeg filter graph or argument. Anything else could change the graph.
+export function finite(v, what, { min = -Infinity, max = Infinity } = {}) {
+	const n = Number(v);
+	if (typeof v === 'boolean' || v === null || v === '' || !Number.isFinite(n) || n < min || n > max) throw new Error(`Bad ${what} "${v}"`);
+	return n;
+}
+
+// Output files must have a media extension, so a typo can't overwrite a dotfile or a document.
+export function outputPath(p, exts, what) {
+	const ext = path.extname(p).toLowerCase();
+	if (!exts.includes(ext)) throw new Error(`${what} must end in ${exts.join(', ')}: ${p}`);
+	return p;
+}
+
 export function parseSize(s, fallback = [1920, 1080]) {
 	if (!s) return fallback;
 	if (Array.isArray(s)) return s.map(Number);
@@ -71,7 +99,10 @@ export function merge(base, over) {
 	if (typeof base !== 'object' || base === null || Array.isArray(base)) return over;
 	if (typeof over !== 'object' || over === null || Array.isArray(over)) return over;
 	const out = { ...base };
-	for (const [k, v] of Object.entries(over)) out[k] = merge(base[k], v);
+	for (const [k, v] of Object.entries(over)) {
+		if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+		out[k] = merge(base[k], v);
+	}
 	return out;
 }
 
@@ -86,5 +117,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function num(n) {
 	// Compact, locale-free number formatting for ffmpeg expressions.
+	// Throws on anything that isn't a finite number, so YAML can't inject filter syntax.
+	if (typeof n !== 'number' || !Number.isFinite(n)) throw new Error(`Expected a number, got ${JSON.stringify(n)}`);
 	return Number(n.toFixed(4)).toString();
 }

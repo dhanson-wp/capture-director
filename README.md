@@ -78,8 +78,8 @@ Per shot, or in `defaults`:
 
 | Key | Default | What it does |
 |---|---|---|
-| `id` | `shot-N` | Folder and file name |
-| `url` | | Page to record |
+| `id` | `shot-N` | Folder and file name. Letters, numbers, dots, dashes, and underscores |
+| `url` | | Page to record (`http` or `https`) |
 | `viewport` | `{ width: 1440, height: 810 }` | CSS viewport |
 | `scale` | `1.3333333` | Device scale factor; output is viewport x scale. Use `2` for crisper zooms |
 | `output` | `1920x1080` | Final clip size |
@@ -199,10 +199,13 @@ For a more designed piece, such as kinetic type, animated end cards, or motion g
 
 - **Everything runs on your machine.** There's no server, no account, and no telemetry. Nothing is uploaded.
 - **The browser starts logged out every time.** Each shot gets a fresh, empty Chrome profile, with no cookies, saved passwords, or extensions from your own browser. You can't accidentally record your admin bar or inbox.
-- **Network traffic goes only where you point it:** the URLs in your shot list, plus any font or music URLs in your timeline.
-- **A shot list is a script.** The `eval` and `css` steps run code inside the page you're recording, and file paths read local files (fonts, music, clips). Read a shot list from someone else before you run it, the same way you'd read a shell script.
+- **Chrome keeps its sandbox on.** Playwright turns Chrome's sandbox off by default; capture director turns it back on, since it's visiting websites you don't control. Downloads are refused. (`CD_NO_SANDBOX=1` is there for containers that can't run it.)
+- **Network traffic goes only where you point it:** the URLs in your shot list, plus any font URLs in your timeline. Shot URLs must be `http` or `https`, and clips and music must be local files, so ffmpeg never fetches anything.
+- **A shot list is a script.** The `eval` and `css` steps run code inside the page you're recording, and file paths read local files (fonts, music, clips). Read a shot list from someone else before you run it, the same way you'd read a shell script. Within that, the YAML can't reach outside what it describes: values that end up in ffmpeg filter graphs must be plain numbers or known names, shot ids must be plain names, outputs need a video extension, and re-recording only clears the frame files it wrote.
 - **Two dependencies:** `playwright-core` (it drives your installed Chrome, with no browser download) and `yaml`. `npm audit` reports no known vulnerabilities.
 - **Mind what's on the page.** It records exactly what a logged-out visitor sees. Don't record staging sites or pages with personal data you wouldn't publish.
+
+See [SECURITY.md](SECURITY.md) for the details and how to report a problem.
 
 ## Accessibility
 
@@ -214,7 +217,7 @@ Videos made with it have no voiceover, so they read fine on mute. Captions are d
 npm test
 ```
 
-The tests cover the zoom planner, step parsing, and a check that the generated ffmpeg expressions parse.
+The tests cover the zoom planner, step parsing, a check that the generated ffmpeg expressions parse, and the input checks that keep YAML out of the filter graph.
 
 ## License
 

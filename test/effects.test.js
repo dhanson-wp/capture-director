@@ -64,3 +64,40 @@ test('page styles hide WordPress bars and scrollbars unless turned off', () => {
 	assert.doesNotMatch(pageStyles({ hideWpBars: false }), /#atomic-proxy-bar/);
 	assert.equal(pageStyles({ hideWpBars: false, hideScrollbars: false }), '');
 });
+
+test('YAML values that could reach the filter graph are rejected', async () => {
+	const { finite, num, safeId, localFile, outputPath, merge } = await import('../src/util.js');
+	assert.throws(() => num('1,movie=/etc/passwd'));
+	assert.throws(() => num(NaN));
+	assert.throws(() => finite('30[x];movie', 'fps'));
+	assert.equal(finite('30', 'fps'), 30);
+	assert.throws(() => safeId('../../etc'));
+	assert.throws(() => safeId('a/b'));
+	assert.equal(safeId('home-2'), 'home-2');
+	assert.throws(() => localFile('/tmp/t.yaml', 'https://example.com/a.m3u8', 'clip'));
+	assert.throws(() => localFile('/tmp/t.yaml', 'concat:a|b', 'clip'));
+	assert.equal(localFile('/tmp/t.yaml', 'out/a.mp4', 'clip'), '/tmp/out/a.mp4');
+	assert.throws(() => outputPath('/Users/x/.zshrc', ['.mp4'], 'output'));
+	const polluted = merge({}, JSON.parse('{"__proto__": {"hacked": true}}'));
+	assert.equal(polluted.hacked, undefined);
+});
+
+test('shot lists reject unsafe ids, urls, and encoder settings', async () => {
+	const { loadShots } = await import('../src/shots.js');
+	const { writeFile, mkdtemp } = await import('node:fs/promises');
+	const { tmpdir } = await import('node:os');
+	const dir = await mkdtemp(`${tmpdir()}/cd-`);
+	const file = `${dir}/shots.yaml`;
+	const bad = [
+		'shots: [{ id: "../x", url: "https://example.com" }]',
+		'shots: [{ url: "file:///etc/passwd" }]',
+		'shots: [{ url: "https://example.com", fps: "30,movie=x" }]',
+		'shots: [{ url: "https://example.com", preset: "slow -i x" }]',
+	];
+	for (const yaml of bad) {
+		await writeFile(file, yaml);
+		await assert.rejects(loadShots(file), yaml);
+	}
+	await writeFile(file, 'shots: [{ id: home, url: "https://example.com" }]');
+	assert.equal((await loadShots(file)).shots[0].id, 'home');
+});
