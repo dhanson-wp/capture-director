@@ -230,7 +230,7 @@ Videos made with it have no voiceover, so they read fine on mute. Captions are d
 npm test
 ```
 
-The tests cover the zoom planner, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules.
+The tests cover the zoom planner, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules. GitHub Actions runs them on Node 20 and 22 for every pull request and every push to `main`.
 
 ## License
 
