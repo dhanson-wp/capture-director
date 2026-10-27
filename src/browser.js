@@ -11,7 +11,10 @@ export async function launch({ scale } = {}) {
 	if (scale) args.push(`--force-device-scale-factor=${scale}`);
 	// CD_CHROME_CHANNEL=bundled uses Playwright's cached chromium-headless-shell instead.
 	const channel = process.env.CD_CHROME_CHANNEL || 'chrome';
-	return chromium.launch({ ...(channel === 'bundled' ? {} : { channel }), headless: true, args });
+	// Playwright turns Chrome's sandbox off by default. Pages here are arbitrary websites,
+	// so keep it on. CD_NO_SANDBOX=1 is the escape hatch for containers that can't run it.
+	const chromiumSandbox = process.env.CD_NO_SANDBOX !== '1';
+	return chromium.launch({ ...(channel === 'bundled' ? {} : { channel }), headless: true, chromiumSandbox, args });
 }
 
 // A clean macOS-style arrow. The tip (hotspot) sits at (4, 3) in CSS px.
@@ -38,14 +41,17 @@ export async function renderCursor(browser, file, { scale = 1, pressed = false, 
 	return [CURSOR_HOTSPOT[0] * scale * size, CURSOR_HOTSPOT[1] * scale * size];
 }
 
+const MAX_FONT = 20e6;
+
 // Fonts are embedded as data URLs, so a local file or a URL both work.
 async function fontFace(font) {
 	if (!font) return '';
 	let buf;
 	if (/^https?:\/\//.test(font)) {
-		const res = await fetch(font);
+		const res = await fetch(font, { signal: AbortSignal.timeout(20000) });
 		if (!res.ok) throw new Error(`Font fetch failed: ${font} (${res.status})`);
 		buf = Buffer.from(await res.arrayBuffer());
+		if (buf.length > MAX_FONT) throw new Error(`Font is over ${MAX_FONT / 1e6} MB: ${font}`);
 	} else {
 		buf = await readFile(font);
 	}
@@ -57,9 +63,42 @@ async function fontFace(font) {
 
 const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
+// Card and caption pages allow no scripts and no network: fonts arrive as data URLs.
+const CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:">`;
+
+// Style values from YAML go into a <style> block. Colors, sizes, and font stacks
+// never need these characters, and with them a value could close the block.
+function css(v, what) {
+	const s = String(v);
+	if (/[<>{};\\]|\/\*/.test(s)) throw new Error(`Bad ${what} "${s}"`);
+	return s;
+}
+const px = (v, what) => {
+	const n = Number(v);
+	if (!Number.isFinite(n) || n < 0 || n > 2000) throw new Error(`Bad ${what} "${v}"`);
+	return n;
+};
+
+function cardStyle(c) {
+	return {
+		...c,
+		background: css(c.background, 'background'),
+		color: css(c.color, 'color'),
+		muted: css(c.muted, 'muted'),
+		align: c.align === 'left' ? 'left' : 'center',
+		titleSize: px(c.titleSize, 'titleSize'),
+		subtitleSize: px(c.subtitleSize, 'subtitleSize'),
+		kickerSize: px(c.kickerSize, 'kickerSize'),
+		weight: css(c.weight, 'weight'),
+		stretch: css(c.stretch, 'stretch'),
+		fontFamily: c.fontFamily && css(c.fontFamily, 'fontFamily'),
+		monoFamily: c.monoFamily && css(c.monoFamily, 'monoFamily'),
+	};
+}
+
 // Render a title or end card to a PNG at the output size.
 export async function renderCard(browser, file, card, { width, height }) {
-	const c = {
+	const c = cardStyle({
 		background: '#141312',
 		color: '#f2efe9',
 		muted: 'rgba(242,239,233,0.62)',
@@ -70,12 +109,12 @@ export async function renderCard(browser, file, card, { width, height }) {
 		weight: 500,
 		stretch: '100%',
 		...card,
-	};
+	});
 	const family = `${c.font ? '"CardFont",' : ''}${c.fontFamily ? `${c.fontFamily},` : ''}"Helvetica Neue",Helvetica,Arial,sans-serif`;
 	const monoFamily = `${c.monoFont ? '"CardMono",' : ''}${c.monoFamily ? `${c.monoFamily},` : ''}ui-monospace,Menlo,monospace`;
 	const face = await fontFace(c.font);
 	const mono = c.monoFont ? (await fontFace(c.monoFont)).replace('"CardFont"', '"CardMono"') : '';
-	const html = `<!doctype html><meta charset="utf-8"><style>
+	const html = `<!doctype html><meta charset="utf-8">${CSP}<style>
 ${face}${mono}
 html,body{margin:0;width:${width}px;height:${height}px;background:${c.background};color:${c.color};overflow:hidden}
 body{display:flex;flex-direction:column;justify-content:center;align-items:${c.align === 'left' ? 'flex-start' : 'center'};
@@ -111,11 +150,19 @@ export async function renderCaption(browser, file, cap, { width, height }) {
 		plate: null, // e.g. "rgba(0,0,0,0.55)" for a backing behind busy footage
 		...cap,
 	};
+	if (!['bottom-left', 'bottom-right', 'top-left', 'top-right'].includes(c.position)) throw new Error(`Bad caption position "${c.position}"`);
+	c.color = css(c.color, 'caption color');
+	c.opacity = px(c.opacity, 'caption opacity');
+	c.size = px(c.size, 'caption size');
+	c.margin = px(c.margin, 'caption margin');
+	c.weight = css(c.weight, 'caption weight');
+	if (c.plate) c.plate = css(c.plate, 'caption plate');
+	if (c.fontFamily) c.fontFamily = css(c.fontFamily, 'caption fontFamily');
 	const family = `${c.font ? '"CardFont",' : ''}${c.fontFamily ? `${c.fontFamily},` : ''}ui-monospace,Menlo,monospace`;
 	const plate = c.plate ? `background:${c.plate};padding:${Math.round(c.size * 0.45)}px ${Math.round(c.size * 0.7)}px;border-radius:${Math.round(c.size * 0.25)}px;` : '';
 	const face = await fontFace(c.font);
 	const [v, h] = c.position.split('-');
-	const html = `<!doctype html><meta charset="utf-8"><style>
+	const html = `<!doctype html><meta charset="utf-8">${CSP}<style>
 ${face}
 html,body{margin:0;width:${width}px;height:${height}px;background:transparent;overflow:hidden}
 .cap{position:absolute;${v === 'top' ? 'top' : 'bottom'}:${c.margin}px;${h === 'right' ? 'right' : 'left'}:${c.margin}px;

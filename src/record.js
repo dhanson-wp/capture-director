@@ -2,7 +2,7 @@
 // frame with the CDP screencast, and logs cursor moves, clicks, and hovers
 // with real timestamps for post-production.
 
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { launch } from './browser.js';
 import { ease, log, sleep } from './util.js';
@@ -267,14 +267,14 @@ export function pageStyles(shot) {
 
 export async function recordShot(browser, shot, dir) {
 	const frameDir = path.join(dir, 'frames');
-	await rm(frameDir, { recursive: true, force: true });
-	await mkdir(frameDir, { recursive: true });
+	await clearFrames(frameDir);
 
 	const context = await browser.newContext({
 		viewport: shot.viewport,
 		deviceScaleFactor: shot.scale,
 		colorScheme: shot.colorScheme,
 		reducedMotion: shot.reducedMotion,
+		acceptDownloads: false,
 	});
 	// An init script rather than addStyleTag, so the styles survive navigation. A bar that
 	// appears late on a second page would otherwise shift the layout under the next click.
@@ -376,6 +376,15 @@ export async function recordShot(browser, shot, dir) {
 	await writeFile(path.join(dir, 'capture.json'), JSON.stringify(meta, null, 2));
 	log(`${shot.id}: ${frames.length} frames over ${meta.duration}s (${meta.avgFps} fps average, frames are held while the page is still)`);
 	return meta;
+}
+
+// Remove only the files a previous recording wrote, never the whole folder,
+// so a misconfigured `out` can't take anything else with it.
+async function clearFrames(frameDir) {
+	await mkdir(frameDir, { recursive: true });
+	for (const name of await readdir(frameDir)) {
+		if (/^\d{6}\.jpg$/.test(name) || name === 'list.ffconcat') await rm(path.join(frameDir, name), { force: true });
+	}
 }
 
 // Width and height from a JPEG's SOF marker.

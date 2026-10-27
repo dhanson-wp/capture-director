@@ -5,7 +5,9 @@ import path from 'node:path';
 import { recordShot, withBrowser } from './record.js';
 import { renderCursor } from './browser.js';
 import { zoomPlan, zoomFilter, cursorExprs, pressedEnable, ZOOM_DEFAULTS } from './effects.js';
-import { ffmpeg, loadYaml, log, merge, parseSize, probe, resolveFrom } from './util.js';
+import { ffmpeg, finite, loadYaml, log, merge, parseSize, probe, resolveFrom, safeId } from './util.js';
+
+const PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow', 'placebo'];
 
 export const SHOT_DEFAULTS = {
 	viewport: { width: 1440, height: 810 },
@@ -27,10 +29,17 @@ export async function loadShots(file) {
 	const outDir = resolveFrom(file, doc.out || 'out');
 	const shots = (doc.shots || []).map((s, i) => {
 		const shot = merge(defaults, s);
-		shot.id = s.id || `shot-${i + 1}`;
+		shot.id = safeId(s.id || `shot-${i + 1}`);
 		if (typeof shot.zoom === 'boolean') shot.zoom = { ...defaults.zoom, enabled: shot.zoom };
 		if (typeof shot.cursor === 'boolean') shot.cursor = { ...defaults.cursor, enabled: shot.cursor };
 		if (!shot.url) throw new Error(`Shot ${shot.id} has no url`);
+		// Web pages only. A file: URL would record whatever local file it names.
+		if (!/^https?:\/\//i.test(shot.url)) throw new Error(`Shot ${shot.id}: url must start with http:// or https://`);
+		shot.fps = finite(shot.fps, `${shot.id} fps`, { min: 1, max: 120 });
+		shot.crf = finite(shot.crf, `${shot.id} crf`, { min: 0, max: 51 });
+		shot.quality = finite(shot.quality, `${shot.id} quality`, { min: 1, max: 100 });
+		shot.scale = finite(shot.scale, `${shot.id} scale`, { min: 0.5, max: 4 });
+		if (!PRESETS.includes(shot.preset)) throw new Error(`Shot ${shot.id}: unknown preset "${shot.preset}"`);
 		return shot;
 	});
 	return { file, outDir, shots };
@@ -72,6 +81,8 @@ export async function processShot(browser, shot, dir) {
 		throw new Error(`${shot.id}: no capture at ${dir}; run record first`);
 	});
 	const cap = JSON.parse(await readFile(capPath, 'utf8'));
+	// capture.json lands in the filter graph, so check it as carefully as the YAML.
+	cap.duration = finite(cap.duration, `${shot.id} capture duration`, { min: 0 });
 	const first = await probe(path.join(dir, 'frames', '000000.jpg'));
 	const W = first.width;
 	const H = first.height;
@@ -84,7 +95,8 @@ export async function processShot(browser, shot, dir) {
 	const plan = zoomPlan(events, { W, H, duration: cap.duration }, shot.zoom);
 	const zoom = zoomFilter(plan, { W, H, fps });
 
-	const inputs = ['-f', 'concat', '-safe', '0', '-i', path.join(dir, 'frames', 'list.ffconcat')];
+	// Safe mode (the default) only accepts plain relative names, which is all the recorder writes.
+	const inputs = ['-f', 'concat', '-i', path.join(dir, 'frames', 'list.ffconcat')];
 	// The concat demuxer can run long on the held last frame, so trim to the real length.
 	const chain = [`[0:v]fps=${fps},trim=duration=${cap.duration},setpts=PTS-STARTPTS,format=yuv420p[b0]`];
 	let last = 'b0';

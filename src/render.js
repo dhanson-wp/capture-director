@@ -3,20 +3,25 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { launch, renderCard, renderCaption } from './browser.js';
-import { ffmpeg, loadYaml, log, num, parseSize, probe, resolveFrom } from './util.js';
+import { ffmpeg, finite, loadYaml, localFile, log, num, outputPath, parseSize, probe, resolveFrom } from './util.js';
+
+const VIDEO = ['.mp4', '.mov', '.m4v'];
 
 function transitionOf(spec, fallback) {
 	if (spec === undefined || spec === null) return fallback;
 	if (typeof spec === 'number') return { type: fallback.type, duration: spec };
 	if (spec === false || spec === 'cut') return { type: 'cut', duration: 0 };
-	return { type: spec.type ?? fallback.type, duration: spec.duration ?? fallback.duration };
+	const type = spec.type ?? fallback.type;
+	// xfade names are plain words; anything else would be spliced into the filter graph.
+	if (!/^[a-z]+$/.test(type)) throw new Error(`Bad transition type "${type}"`);
+	return { type, duration: finite(spec.duration ?? fallback.duration, 'transition duration', { min: 0 }) };
 }
 
 export async function render(file, { output } = {}) {
 	const tl = await loadYaml(file);
 	const [OW, OH] = parseSize(tl.size);
-	const fps = tl.fps ?? 30;
-	const out = output ? path.resolve(output) : resolveFrom(file, tl.output || 'out/final.mp4');
+	const fps = finite(tl.fps ?? 30, 'fps', { min: 1, max: 120 });
+	const out = outputPath(output ? path.resolve(output) : localFile(file, tl.output || 'out/final.mp4', 'output'), VIDEO, 'output');
 	const work = path.join(path.dirname(out), `.${path.basename(out, '.mp4')}-work`);
 	await mkdir(work, { recursive: true });
 	const defTransition = transitionOf(tl.transition, { type: 'fade', duration: 0.6 });
@@ -41,10 +46,10 @@ export async function render(file, { output } = {}) {
 				if (spec.monoFont) spec.monoFont = resolveFrom(file, spec.monoFont);
 				const png = path.join(work, `card-${i}.png`);
 				await renderCard(browser, png, spec, { width: OW, height: OH });
-				const duration = Number(spec.duration ?? (isEnd ? 4 : 3));
+				const duration = finite(spec.duration ?? (isEnd ? 4 : 3), 'card duration', { min: 0.1 });
 				items.push({ label: isEnd ? 'end card' : 'card', args: ['-loop', '1', '-framerate', String(fps), '-t', num(duration), '-i', png], trim: null, duration, raw });
 			} else if ('clip' in raw) {
-				const src = resolveFrom(file, raw.clip);
+				const src = localFile(file, raw.clip, 'clip');
 				const info = await probe(src);
 				const [a, b] = raw.trim || [0, info.duration];
 				const end = Math.min(b ?? info.duration, info.duration);
@@ -82,9 +87,9 @@ export async function render(file, { output } = {}) {
 		if (!it.caption) return;
 		const c = it.caption;
 		const idx = next++;
-		const start = Math.max(0, Number(c.start ?? 0.6));
-		const end = Math.min(it.duration, c.end !== undefined ? Number(c.end) : it.duration - 0.6);
-		const f = Number(c.fade ?? 0.6);
+		const start = Math.max(0, finite(c.start ?? 0.6, 'caption start'));
+		const end = Math.min(it.duration, c.end !== undefined ? finite(c.end, 'caption end') : it.duration - 0.6);
+		const f = finite(c.fade ?? 0.6, 'caption fade', { min: 0 });
 		inputs.push('-loop', '1', '-framerate', String(fps), '-t', num(it.duration), '-i', c.png);
 		chain.push(
 			`[${idx}:v]format=rgba,fade=t=in:st=${num(start)}:d=${num(f)}:alpha=1,fade=t=out:st=${num(Math.max(start, end - f))}:d=${num(f)}:alpha=1,settb=AVTB[c${i}]`,
@@ -121,7 +126,7 @@ export async function render(file, { output } = {}) {
 		const idx = next++;
 		inputs.push('-stream_loop', '-1');
 		if (m.start) inputs.push('-ss', num(m.start));
-		inputs.push('-i', resolveFrom(file, m.file));
+		inputs.push('-i', localFile(file, m.file, 'music'));
 		const fi = m.fadeIn ?? 1.5;
 		const fo = m.fadeOut ?? 3;
 		chain.push(
@@ -140,7 +145,7 @@ export async function render(file, { output } = {}) {
 		...maps,
 		'-t', num(length),
 		'-r', String(fps), '-fps_mode', 'cfr',
-		'-c:v', 'libx264', '-preset', tl.preset ?? 'slow', '-crf', String(tl.crf ?? 16), '-pix_fmt', 'yuv420p',
+		'-c:v', 'libx264', '-preset', preset(tl.preset ?? 'slow'), '-crf', String(finite(tl.crf ?? 16, 'crf', { min: 0, max: 51 })), '-pix_fmt', 'yuv420p',
 		'-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
 		'-movflags', '+faststart',
 		out,
@@ -150,8 +155,16 @@ export async function render(file, { output } = {}) {
 	return { file: out, ...info, items: items.map((it) => ({ label: it.label, duration: Number(it.duration.toFixed(2)) })) };
 }
 
+function preset(p) {
+	if (!/^[a-z]+$/.test(p)) throw new Error(`Bad preset "${p}"`);
+	return p;
+}
+
 // Contact sheet so an agent can eyeball a clip without playing it.
 export async function contactSheet(video, { every = 1, cols = 4, width = 480, output } = {}) {
+	every = finite(every, 'every', { min: 0.05 });
+	cols = Math.round(finite(cols, 'cols', { min: 1, max: 20 }));
+	if (output) outputPath(output, ['.png'], 'sheet output');
 	const info = await probe(video);
 	const n = Math.ceil(info.duration / every);
 	const rows = Math.ceil(n / cols);
@@ -169,9 +182,10 @@ export async function contactSheet(video, { every = 1, cols = 4, width = 480, ou
 export async function stills(video, times, dir) {
 	await mkdir(dir, { recursive: true });
 	const files = [];
-	for (const t of times) {
-		const f = path.join(dir, `still-${String(t).replace('.', '_')}s.png`);
-		await ffmpeg(['-ss', num(Number(t)), '-i', video, '-frames:v', '1', '-update', '1', f]);
+	for (const raw of times) {
+		const t = finite(raw, 'still time', { min: 0 });
+		const f = path.join(dir, `still-${num(t).replace('.', '_')}s.png`);
+		await ffmpeg(['-ss', num(t), '-i', video, '-frames:v', '1', '-update', '1', f]);
 		files.push(f);
 	}
 	return files;
