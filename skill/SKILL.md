@@ -21,7 +21,7 @@ node <repo>/bin/capture-director.js <command> ...
 4. **Check it yourself.** Run `capture-director sheet <clip.mp4>` and read the PNG. Look for: the zoom framing what changes (not just the button), the cursor landing on targets, images loaded, no cookie banners. For sharpness, `capture-director stills <clip.mp4> 2,5` and read the full-size PNGs.
 5. **Tune without re-recording.** Edit `zoom` settings or `zoom`/`zoomOn` on actions, then `capture-director process shots.yaml`. Note that `zoomOn` and per-action `zoom` are stored at record time, so changing those on an action needs a fresh `record`; shot-level `zoom` settings (`level`, `max`, `ramp`, `hold`, `enabled`) only need `process`.
 6. **Assemble.** Write `timeline.yaml` (cards, clips with `trim`, `end` card, optional `music`) and run `capture-director render timeline.yaml`. Check the result with `sheet` again.
-7. **Report** the output path, duration, and the contact sheet to the user. Don't upload or post the video anywhere unless they ask.
+7. **Report** the output path, duration, and the contact sheet to the user. Don't upload or post the video anywhere unless they ask. Everything you record or render is also in their library; mention `capture-director library` if they want to browse or organize it.
 
 ## Rules of thumb
 

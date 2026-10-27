@@ -1,6 +1,6 @@
 # Security
 
-Capture director is a local tool. It opens websites in headless Chrome, writes frames and videos to your disk, and runs ffmpeg. This page covers what it trusts, what it doesn't, and how it keeps the two apart.
+Capture director is a local tool. It opens websites in headless Chrome, writes frames and videos to your disk, runs ffmpeg, and (if you ask) serves a small library app on your own machine. This page covers what it trusts, what it doesn't, and how it keeps the two apart.
 
 ## Reporting a problem
 
@@ -25,8 +25,19 @@ Please open a private security advisory on the GitHub repository (Security tab, 
 - Card and caption styles can't close their `<style>` block, and those pages run under a Content Security Policy with no scripts and no network.
 - Remote fonts time out after 20 seconds and are capped at 20 MB.
 
+**Other websites and other machines, when the library is open.** `capture-director library` runs a web server, so it gets the most care:
+
+- It listens on `127.0.0.1` only. Nothing else on your network can reach it.
+- It answers only when the `Host` header is its own address, which blocks DNS rebinding (a web page pointing its own hostname at your machine).
+- Every run makes a new random token. The link printed in your terminal trades it for an `HttpOnly`, `SameSite=Strict` cookie, so other sites can't send it and page scripts can't read it.
+- Changes have to be JSON from the app's own origin. Forms and cross-site requests are refused.
+- Videos and thumbnails are served by library id, never by path. Static files come from a fixed list.
+- Pages are served with a strict Content Security Policy, no inline scripts, and `nosniff`. Titles and notes are always inserted as text.
+- The app can retitle, regroup, star, annotate, reveal in Finder, and remove an entry from the list. It can't delete, move, or overwrite a video.
+- `~/.capture-director/` is created readable only by you.
+
 **Pages, for agents.** `skill/SKILL.md` tells an agent that text on a page is data, not instructions, and to use only `eval` steps it wrote itself.
 
 ## Dependencies
 
-Two runtime dependencies: `playwright-core` and `yaml`. Run `npm audit` after installing; at the time of writing it reports no known vulnerabilities.
+Two runtime dependencies: `playwright-core` and `yaml`. Run `npm audit` after installing; at the time of writing it reports no known vulnerabilities. The library's fonts (Manrope and Bricolage Grotesque) ship in `ui/fonts/` under the SIL Open Font License.

@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { record, processAll } from '../src/shots.js';
 import { render, contactSheet, stills } from '../src/render.js';
+import { serve, importPath } from '../src/library.js';
 
 const HELP = `capture-director: record polished website demo clips without a human at the wheel
 
@@ -11,6 +12,8 @@ Usage:
   capture-director render <timeline.yaml> [--out file]  Assemble clips, cards, and music
   capture-director sheet <video.mp4> [--every 1]        Contact sheet PNG for a quick look
   capture-director stills <video.mp4> <t1,t2,...>       Full-size PNG stills at given seconds
+  capture-director library [--port 7465] [--no-open]    Browse and organize everything you've made
+  capture-director library add <folder or video>       Add videos made before the library existed
 
 Every command prints a JSON summary on stdout. Progress goes to stderr.
 `;
@@ -30,7 +33,7 @@ function flags(argv) {
 async function main() {
 	const [cmd, ...rest] = process.argv.slice(2);
 	const f = flags(rest);
-	const target = f._[0] && path.resolve(f._[0]);
+	const target = cmd !== 'library' && f._[0] && path.resolve(f._[0]);
 	let result;
 	switch (cmd) {
 		case 'record':
@@ -47,6 +50,15 @@ async function main() {
 			break;
 		case 'stills':
 			result = await stills(target, String(f._[1] ?? '1').split(','), f.out ?? path.join(path.dirname(target), 'stills'));
+			break;
+		case 'library':
+			if (f._[0] === 'add') {
+				if (!f._[1]) throw new Error('library add needs a folder or video');
+				result = await importPath(f._[1]);
+			} else {
+				const { url, port, library } = await serve({ port: f.port === undefined ? undefined : Number(f.port), open: !f['no-open'] });
+				result = { url, port, library };
+			}
 			break;
 		default:
 			process.stdout.write(HELP);

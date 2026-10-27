@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "ui/index.html"
+        ],
+        "createdAt": "2026-10-27T23:37:30.773Z",
+        "reason": "Claude: the <img> sits inside a <template> and app.js sets src to /thumb/<id> when it clones the card"
+      },
+      {
+        "rule": "buried-raster",
+        "value": "*",
+        "files": [
+          "ui/index.html"
+        ],
+        "createdAt": "2026-10-27T23:42:34.098Z",
+        "reason": "Claude: thumbnail img starts at opacity 0 and app.js adds .loaded (opacity 1) on load, a fade-in"
+      }
+    ]
+  }
+}

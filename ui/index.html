@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Capture director library</title>
+	<link rel="icon" href="/icon.svg" type="image/svg+xml">
+	<link rel="preload" href="/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+	<link rel="preload" href="/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+	<link rel="stylesheet" href="/app.css">
+	<script src="/app.js" defer></script>
+</head>
+<body>
+	<a class="skip" href="#main">Skip to captures</a>
+	<div class="shell">
+		<aside class="side" aria-label="Library">
+			<div class="brand">
+				<img src="/icon.svg" alt="" width="34" height="34">
+				<span>Capture director</span>
+			</div>
+			<nav class="views" aria-label="Views">
+				<button type="button" data-view="all" aria-current="true"><span>All captures</span><b data-count="all">0</b></button>
+				<button type="button" data-view="starred"><span>Starred</span><b data-count="starred">0</b></button>
+				<button type="button" data-view="video"><span>Final videos</span><b data-count="video">0</b></button>
+				<button type="button" data-view="clip"><span>Clips</span><b data-count="clip">0</b></button>
+			</nav>
+			<h2 class="side-label">Projects</h2>
+			<nav class="projects" id="projects" aria-label="Projects"></nav>
+			<p class="side-foot mono"><i></i>Local only. Nothing leaves this Mac.</p>
+		</aside>
+
+		<main id="main" class="main">
+			<header class="top">
+				<h1 id="heading">All captures</h1>
+				<div class="tools">
+					<label class="search">
+						<span class="sr">Search captures</span>
+						<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+						<input id="search" type="search" placeholder="Search" autocomplete="off">
+						<kbd>/</kbd>
+					</label>
+					<label class="sort">
+						<span class="sr">Sort by</span>
+						<select id="sort">
+							<option value="new">Newest</option>
+							<option value="old">Oldest</option>
+							<option value="name">Name</option>
+							<option value="long">Longest</option>
+						</select>
+					</label>
+				</div>
+			</header>
+
+			<section id="grid" class="grid" aria-live="polite"></section>
+
+			<section id="empty" class="empty" hidden>
+				<div class="empty-copy">
+					<h2>Nothing on the reel yet. Record something and it lands here.</h2>
+					<p>Every clip from <code>record</code> and every video from <code>render</code> shows up in this library on its own, wherever you saved it.</p>
+				</div>
+				<div class="terminal">
+					<pre><span class="mono-key">capture-director</span> record shots.yaml
+<span class="mono-key">capture-director</span> render timeline.yaml
+
+<span class="dim"># Already have videos? Bring them in:</span>
+<span class="mono-key">capture-director</span> library add ~/Projects/demos</pre>
+				</div>
+			</section>
+
+			<p id="no-match" class="no-match" hidden>No captures match that.</p>
+		</main>
+	</div>
+
+	<dialog id="detail" class="detail" aria-labelledby="d-title-label">
+		<div class="detail-film">
+			<div class="player">
+				<video id="d-video" controls playsinline preload="metadata"></video>
+				<div class="viewfinder" aria-hidden="true"><b></b><b></b><b></b><b></b></div>
+			</div>
+			<p class="missing-note" id="d-missing" hidden>This file has moved or been deleted. Remove it from the library, or put it back and refresh.</p>
+		</div>
+		<form class="detail-side" id="d-form" method="dialog">
+			<div class="detail-head">
+				<p class="kicker mono" id="d-kind">Clip</p>
+				<button type="button" class="icon-btn" id="d-close" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+				</button>
+			</div>
+			<label class="field">
+				<span id="d-title-label">Title</span>
+				<input id="d-title" maxlength="200" autocomplete="off">
+			</label>
+			<label class="field">
+				<span>Project</span>
+				<input id="d-project" maxlength="100" list="project-list" autocomplete="off">
+				<datalist id="project-list"></datalist>
+			</label>
+			<label class="field">
+				<span>Notes</span>
+				<textarea id="d-notes" rows="3" maxlength="5000" placeholder="What it's for, where it went"></textarea>
+			</label>
+			<button type="button" class="star-toggle" id="d-star" aria-pressed="false">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+				<span>Star</span>
+			</button>
+			<dl class="facts mono" id="d-facts"></dl>
+			<div class="paths">
+				<div class="path-row">
+					<span class="mono">File</span>
+					<code id="d-file"></code>
+					<button type="button" class="ghost" data-copy="file">Copy</button>
+				</div>
+				<div class="path-row" id="d-redo-row">
+					<span class="mono">Redo</span>
+					<code id="d-redo"></code>
+					<button type="button" class="ghost" data-copy="redo">Copy</button>
+				</div>
+			</div>
+			<div class="actions">
+				<button type="button" class="primary" id="d-reveal">Show in Finder</button>
+				<button type="button" class="text-btn" id="d-forget">Remove from library</button>
+			</div>
+			<p class="status mono" id="d-status" role="status"></p>
+		</form>
+	</dialog>
+
+	<template id="card">
+		<article class="card">
+			<button type="button" class="card-open">
+				<span class="thumb">
+					<img alt="" loading="lazy" decoding="async">
+					<span class="corners" aria-hidden="true"><b></b><b></b><b></b><b></b></span>
+					<span class="badge mono"></span>
+					<span class="length mono"></span>
+				</span>
+				<span class="card-title"></span>
+				<span class="card-meta mono"></span>
+			</button>
+			<button type="button" class="card-star" aria-pressed="false">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+			</button>
+		</article>
+	</template>
+
+	<div class="toast mono" id="toast" role="status" hidden></div>
+</body>
+</html>
