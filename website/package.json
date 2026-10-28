@@ -1,0 +1,17 @@
+{
+  "name": "capture-director-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.2.8",
+    "@lucide/astro": "^1.62.0",
+    "astro": "^7.4.2",
+    "gsap": "^3.15.0"
+  }
+}

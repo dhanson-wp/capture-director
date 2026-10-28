@@ -1,0 +1,10 @@
+# Capture director
+
+Capture director is an MIT-licensed local command-line tool by Derek Hanson for recording polished website demo videos. It uses YAML shot lists, Playwright, installed Google Chrome, and ffmpeg. It supports eased zooms, a synthetic cursor, scrolling, and assembly with cards, captions, and music. Default output is 1920x1080 H.264 at 30 fps.
+
+- Source and setup: https://github.com/dhanson-wp/capture-director
+- Download source: https://github.com/dhanson-wp/capture-director/archive/refs/heads/main.zip
+- Requirements: macOS (tested platform), Node.js 20+, Google Chrome, ffmpeg with libx264.
+- Agent instructions: https://github.com/dhanson-wp/capture-director/tree/main/skill
+
+Recording and rendering run locally. No account or telemetry. Websites and external font or music URLs still use the network. Each shot starts with a fresh, logged-out Chrome profile. Shot lists can execute page code and read local media; review untrusted shot lists before running them.

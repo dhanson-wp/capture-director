@@ -1,0 +1,126 @@
+---
+import '../styles/global.css';
+import displayFont from '@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url';
+import bodyFont from '@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2?url';
+import { ArrowUpRight, ArrowDown, ArrowRight, Download, Play, Check, MousePointer2, Plus, Copy, Camera, HardDrive, Terminal } from '@lucide/astro';
+const github = 'https://github.com/dhanson-wp/capture-director';
+const download = `${github}/archive/refs/heads/main.zip`;
+const video = '/demo.mp4';
+const seoTitle = 'Capture director | Open-source website demo videos';
+const seoDescription = 'Create polished website demo videos with automatic zooms and a clean cursor. Free, local, and open source. Built for Codex and Claude Code.';
+const socialImage = 'https://capture-director.space.fast/og-image.png';
+const socialAlt = 'Capture director logo and viewfinder icon. You built it. Now roll. Open-source website demo videos.';
+const faqs = [
+  ['What is Capture director?', 'Capture director is a local command-line tool that records polished website demo videos from YAML shot lists. It uses Playwright, Google Chrome, and ffmpeg to add eased zooms and a clean cursor, then assemble clips, cards, captions, and music.'],
+  ['Is Capture director free?', 'Yes. Capture director is open source under the MIT license. Download the source from GitHub and run it on your own machine. There’s no subscription or account to create.'],
+  ['What do I need to run it?', 'You’ll need macOS (the platform tested so far), Node.js 20 or newer, installed Google Chrome, and ffmpeg with libx264. It’s a command-line tool, not a packaged desktop app.'],
+  ['Can Codex or Claude Code use it?', 'Yes. The repository includes an agent skill for scouting pages, writing shot lists, recording clips, and checking contact sheets. You can also write and run the YAML yourself.'],
+  ['Does my recording leave my computer?', 'Recording and rendering run locally, with no telemetry or automatic uploads. Chrome visits the URLs in your shot list; external fonts or music in your timeline can also use the network. Every shot starts in a fresh, logged-out browser profile.'],
+  ['What kind of video does it export?', 'The defaults produce 1920 × 1080 H.264 video at 30 fps. You can change the output size, frame rate, and quality in your shot list. The render command can add crossfades, title cards, captions, and a music bed.'],
+];
+const software = { '@context':'https://schema.org', '@type':'SoftwareApplication', name:'Capture director', applicationCategory:'MultimediaApplication', operatingSystem:'macOS', description:faqs[0][1], downloadUrl:download, codeRepository:github, license:'https://opensource.org/license/mit', offers:{'@type':'Offer',price:'0',priceCurrency:'USD'}, author:{'@type':'Person',name:'Derek Hanson',url:'https://derekhanson.blog/'} };
+const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faqs.map(([name,text])=>({'@type':'Question',name,acceptedAnswer:{'@type':'Answer',text}}))};
+const install = `git clone https://github.com/dhanson-wp/capture-director.git\ncd capture-director\nnpm install\nnpm link`;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#e5d935" />
+    <title>{seoTitle}</title>
+    <meta name="description" content={seoDescription} />
+    <meta property="og:title" content={seoTitle} />
+    <meta property="og:description" content={seoDescription} />
+    <meta property="og:site_name" content="Capture director" />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={socialAlt} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://capture-director.space.fast/" />
+    <link rel="canonical" href="https://capture-director.space.fast/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={seoTitle} />
+    <meta name="twitter:description" content={seoDescription} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content={socialAlt} />
+    <link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={bodyFont} as="font" type="font/woff2" crossorigin />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <script type="application/ld+json" set:html={JSON.stringify(software)} />
+    <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="reading-progress" aria-hidden="true"></div>
+    <header class="header wrap">
+      <a href="#" class="brand" aria-label="Capture director home"><img src="/icon.svg" width="38" height="38" alt="" />Capture director<span class="brand-dot">.</span></a>
+      <nav aria-label="Main navigation"><a href="#demo">The demo</a><a href="#how-it-works">How it works</a><a class="nav-github" href={github}>GitHub <ArrowUpRight aria-hidden="true" /></a></nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div class="hero-title"><h1 id="hero-title"><span class="title-line"><span class="title-phrase">You built it.</span></span><span class="title-line roll-line"><span class="title-phrase">Now roll.</span></span></h1></div>
+        <div class="hero-copy"><div class="hero-copy-inner"><p>Website demo videos, directed by you.</p><p class="intro">Give Codex or Claude Code a shot list. Get a polished website video with eased zooms, a clean cursor, and the whole workflow on your machine.</p><a class="button primary" href={download}>Download from GitHub <Download aria-hidden="true" /></a><p class="small muted">Free & open source · Runs locally · MIT license</p><a class="text-link watch-link" href="#demo">Watch what it makes <ArrowDown class="inline-arrow" aria-hidden="true" /></a></div></div>
+        <div class="hero-bottom"><span>From the browser to the big picture.</span><span class="record-label"><i></i> A little tool by Derek Hanson</span></div>
+      </section>
+      <section id="demo" class="demo-section" aria-label="Watch a Capture director video">
+        <div class="demo-top wrap"><span>One shot list. One timeline. Here’s the result.</span><span class="mono">1920 × 1080 / H.264</span></div>
+        <div class="demo-stage wrap">
+          <div class="viewfinder" aria-hidden="true"><b></b><b></b><b></b><b></b></div>
+          <div class="video-shell"><video id="demo-video" controls playsinline preload="none" poster="/demo-poster.png" aria-describedby="demo-description"><source src={video} type="video/mp4" /><track kind="descriptions" src="/demo.vtt" srclang="en" label="English description" /><p><a href={video}>Watch the demo video</a></p></video></div>
+          <button id="play-demo" class="play-demo" aria-label="Play the 31-second blog tour"><Play aria-hidden="true" /><span>Play the film<small>00:31 · Sound optional</small></span></button>
+        </div>
+        <div class="demo-bottom wrap"><p id="demo-description">A real tour of <a href="https://derekhanson.blog/">Derek’s blog</a>, made with Capture director. Watch the cursor, zooms, scrolling, captions, and cards.</p><span class="mono">Made with this tool.</span></div>
+        <p class="video-error wrap" role="status" hidden>The video couldn’t load. <a href="https://github.com/user-attachments/assets/7dd927e2-ffc4-4c9b-ae6e-c7b4bf5049b5">Open the demo on GitHub</a>.</p>
+      </section>
+      <section class="statement wrap"><h2>A few directions.<br /><span class="take-line">A much better take.<span class="take-rule" aria-hidden="true"></span></span></h2><p>You’ve built the thing. Now show people how it works. Capture director records a live website from your instructions and adds the camera work for you.</p></section>
+      <section id="how-it-works" class="workflow" aria-labelledby="workflow-title">
+        <div class="workflow-inner wrap">
+          <div class="workflow-heading"><h2 id="workflow-title">You direct.<br />It does the camera work.</h2><p>Scroll to make the film.</p></div>
+          <div class="workflow-layout">
+            <div class="workflow-steps">
+              <article class="step active" data-step="0"><span class="step-index">01</span><div><h3>Give it a little direction.</h3><p>A URL, a click, a place to scroll. You or your agent writes the shot list.</p></div></article>
+              <article class="step" data-step="1"><span class="step-index">02</span><div><h3>Follow the action.</h3><p>Watch actual Capture director footage. The camera eases into clicks and follows the cursor.</p></div></article>
+              <article class="step" data-step="2"><span class="step-index">03</span><div><h3>Find the rhythm.</h3><p>Clips fall into a timeline. Add a title, captions, and a music bed.</p></div></article>
+              <article class="step" data-step="3"><span class="step-index">04</span><div><h3>That’s a wrap.</h3><p>Render your finished H.264 film. The footage stays on your machine until you share it.</p></div></article>
+            </div>
+            <div class="process-stage">
+              <div class="stage-chrome"><span class="stage-file">shots.yaml</span><span class="stage-status"><i></i><span id="stage-status-text">Ready to direct</span></span></div>
+              <div class="process-visual">
+                <div class="code-scene"><pre><code><span class="code-key">shots:</span>
+  - <span class="code-key">id:</span> blog-tour
+    <span class="code-key">url:</span> https://derekhanson.blog
+    <span class="code-key">actions:</span>
+      - <span class="code-key">hover:</span> "text=Writing"
+        <span class="code-key">zoom:</span> 1.5
+        <span class="code-key">hold:</span> 1800
+      - <span class="code-key">scroll:</span>
+          <span class="code-key">by:</span> 600
+          <span class="code-key">duration:</span> 2200
+      - <span class="code-key">click:</span> "text=Essays"
+        <span class="code-key">zoom:</span> 1.6</code></pre><span class="scene-note">A short, illustrative shot list.</span></div>
+                <div class="capture-scene" aria-hidden="true"><div class="capture-image"><video id="story-video" muted playsinline preload="none" poster="/story/frame-1.jpg"><source data-src="/story.mp4" type="video/mp4" /></video></div><div class="shot-note"><MousePointer2 aria-hidden="true" /><span>Chrome follows the shot list.</span></div><div class="capture-badge"><i></i> Actual Capture director footage</div></div>
+                <div class="edit-scene" aria-hidden="true"><div class="edit-monitor"><img src="/story/frame-3.jpg" alt="" width="400" height="225" /><span class="edit-caption">A few new ways to share.</span></div><div class="edit-tracks"><div class="track-label">Picture</div><div class="film-clips">{[1,2,3,4].map((n)=><div class="film-clip"><img src={`/story/frame-${n}.jpg`} width="400" height="225" alt="" /><span>Shot {n}</span></div>)}</div><div class="track-label">Titles</div><div class="title-track"><span>A blog tour</span><span>The little details</span></div><div class="track-label">Music</div><div class="music-track"><span></span>{Array.from({length:36},(_,i)=><i style={`--level:${[35,65,45,90,60,80,40][i%7]}%`}></i>)}</div></div><span class="edit-note">An illustrative timeline, using frames from the real demo.</span></div>
+                <div class="render-scene" aria-hidden="true"><img src="/story/frame-4.jpg" alt="" width="400" height="225" /><div class="export-badge"><Check aria-hidden="true" />blog-tour.mp4<small>1920 × 1080 · H.264</small><span>Ready for its audience.</span></div></div>
+              </div>
+              <div class="story-scrubber" aria-hidden="true"><span id="story-time">00:00</span><div class="story-progress"><div></div><b></b></div><span>00:31</span></div>
+              <p class="story-instruction">Your scroll is the playhead. Scroll back to rewind.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="details wrap" aria-labelledby="details-title"><div class="details-title"><h2 id="details-title">The polish is<br />in the details.</h2><p>Made for the little things that make a website demo feel considered.</p></div><div class="detail-list"><article><span class="detail-rule" aria-hidden="true"></span><h3><Camera class="detail-icon" aria-hidden="true" />Camera work that follows the action.</h3><p>Zoom into a click. Pan between nearby targets. Frame a button and the thing it changes together.</p><span>Automatic zooms & framing</span></article><article><span class="detail-rule" aria-hidden="true"></span><h3><MousePointer2 class="detail-icon" aria-hidden="true" />A cursor with somewhere to be.</h3><p>Eased movement, hover pauses, and a subtle press on clicks. The cursor is drawn into the video, so it stays clean.</p><span>Synthetic cursor</span></article><article><span class="detail-rule" aria-hidden="true"></span><h3><HardDrive class="detail-icon" aria-hidden="true" />Your machine. Your footage.</h3><p>Recording and rendering happen locally. There’s no account, no telemetry, and no automatic upload.</p><span>Local by design</span></article><article><span class="detail-rule" aria-hidden="true"></span><h3><Terminal class="detail-icon" aria-hidden="true" />A workflow your agent can run.</h3><p>The included skill guides Codex or Claude Code through scouting, recording, and checking contact sheets.</p><a href={`${github}/tree/main/skill`}>Read the agent skill <ArrowUpRight class="inline-arrow" aria-hidden="true" /></a></article></div></section>
+      <section id="get-started" class="get-started"><div class="wrap setup-layout"><div><h2>Your next demo<br />starts here.</h2><p>Grab the source, install the dependencies, and give the example a run. Then point it at something you’ve built.</p><a class="button light" href={download}>Download the source <Download aria-hidden="true" /></a><a class="setup-docs" href={github}>Read the setup guide on GitHub <ArrowUpRight class="inline-arrow" aria-hidden="true" /></a></div><div class="terminal"><div class="terminal-top"><span>Start with the source</span><button id="copy-install" aria-label="Copy installation commands"><span class="copy-icons" aria-hidden="true"><Copy class="copy-icon" /><Check class="copied-icon" /></span><span>Copy commands</span></button></div><pre><code id="install-code">{install}</code></pre><div class="terminal-divider"></div><p>Then try the included example</p><pre><code>cd examples/blog-tour
+capture-director record shots.yaml
+capture-director render timeline.yaml</code></pre><p id="copy-status" role="status" class="copy-status"></p></div><div class="requirements"><strong>Before you roll</strong><span>macOS (tested so far)</span><span>Node.js 20+</span><span>Google Chrome</span><span>ffmpeg with libx264</span><p>A command-line tool. Review shot lists from others before running them; they can execute page code and read local media.</p></div></div></section>
+      <section class="faq wrap" aria-labelledby="faq-title"><div><h2 id="faq-title">A few things<br />to know.</h2><p>More detail lives in <a href={github}>the README</a>.</p></div><div class="faq-list">{faqs.map(([q,a])=><details><summary>{q}<Plus class="faq-icon" aria-hidden="true" /></summary><p>{a}</p></details>)}</div></section>
+      <section class="closing wrap"><img src="/icon.svg" width="56" height="56" alt="" /><h2>What have you built<br />that deserves a demo?</h2><a class="button primary" href={github}>Make your first film <ArrowRight aria-hidden="true" /></a></section>
+    </main>
+    <footer class="wrap"><a class="brand" href="#"><img src="/icon.svg" alt="" width="28" height="28" />Capture director.</a><span>Made by <a href="https://derekhanson.blog/">Derek Hanson</a></span><a href={`${github}/blob/main/LICENSE`}>Open source. MIT licensed. <ArrowUpRight class="inline-arrow" aria-hidden="true" /></a></footer>
+    <script>
+      import "../scripts/motion";
+    </script>
+  </body>
+</html>
