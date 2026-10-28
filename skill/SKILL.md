@@ -33,6 +33,7 @@ node <repo>/bin/capture-director.js <command> ...
 - Hovers zoom too by default. Use `move` for cursor travel that shouldn't zoom.
 - Keep clips short (5 to 15 s). Trim in the timeline rather than re-recording.
 - Follow the user's house style for card and caption copy if they have one.
+- If the user wants the video both with and without captions, keep one timeline and render the clean cut with `--no-captions --out <other file>`.
 - Text cards are rendered by Chrome from a font file or URL (`font:`), since many ffmpeg builds have no `drawtext`.
 - Every command prints JSON on stdout. Parse it rather than guessing paths.
 

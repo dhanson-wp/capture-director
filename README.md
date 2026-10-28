@@ -152,6 +152,8 @@ items:
 
 Caption fields: `text`, `start` and `end` (seconds into the item; defaults leave 0.6 s at each end), `fade`, `position` (`bottom-left`, `bottom-right`, `top-left`, or `top-right`), `size`, `opacity`, `color`, `margin`, `weight`, `shadow`, `plate` (a backing color for busy or light footage), and `font`. `opacity` (0.7 by default) fades the plate along with the text, so set it to 1 when you use a plate, and pick a plate color that contrasts with the page rather than one that matches its background. A plain string works too: `caption: Every post, in one place.`
 
+To make a clean version of the same video, run `render` with `--no-captions` and an `--out` of its own, such as `capture-director render timeline.yaml --no-captions --out out/clean.mp4`. Cards, transitions, and music stay the same.
+
 Card fields: `kicker`, `title`, `subtitle`, `url`, `duration`, `align` (`center` or `left`), `background`, `color`, `muted`, `titleSize`, `subtitleSize`, `weight`, `stretch`, `font`, `fontFamily`, and `monoFont`.
 
 Cards are drawn by headless Chrome from the font file, not by ffmpeg's `drawtext`. Many ffmpeg builds, Homebrew's included, ship without `drawtext`, and Chrome's text rendering is better anyway: real kerning, variable font weights and widths, and proper antialiasing.
@@ -162,6 +164,7 @@ Cards are drawn by headless Chrome from the font file, not by ffmpeg's `drawtext
 capture-director record <shots.yaml> [--only id,id]   # record, then add zoom and cursor
 capture-director process <shots.yaml> [--only id,id]  # redo zoom and cursor without re-recording
 capture-director render <timeline.yaml> [--out file]  # assemble the final video
+                  [--no-captions]                    # same video, with every caption left out
 capture-director sheet <video.mp4> [--every 1]        # contact sheet PNG
 capture-director stills <video.mp4> 1.5,4,8           # full-size PNG stills
 capture-director library                              # browse and organize everything you've made

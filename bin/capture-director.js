@@ -10,6 +10,7 @@ Usage:
   capture-director record <shots.yaml> [--only id,id]   Record shots, then add zoom and cursor
   capture-director process <shots.yaml> [--only id,id]  Redo zoom and cursor on existing captures
   capture-director render <timeline.yaml> [--out file]  Assemble clips, cards, and music
+                    [--no-captions]                      Leave out every caption in the timeline
   capture-director sheet <video.mp4> [--every 1]        Contact sheet PNG for a quick look
   capture-director stills <video.mp4> <t1,t2,...>       Full-size PNG stills at given seconds
   capture-director library [--port 7465] [--no-open]    Browse and organize everything you've made
@@ -43,7 +44,7 @@ async function main() {
 			result = await processAll(target, { only: f.only });
 			break;
 		case 'render':
-			result = await render(target, { output: f.out });
+			result = await render(target, { output: f.out, captions: !f['no-captions'] });
 			break;
 		case 'sheet':
 			result = await contactSheet(target, { every: Number(f.every ?? 1), cols: Number(f.cols ?? 4), output: f.out });
