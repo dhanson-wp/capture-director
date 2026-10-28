@@ -7,3 +7,5 @@ website/dist/
 website/.astro/
 output/
 .impeccable/review/
+.playwright-cli/
+!website/public/*.mp4

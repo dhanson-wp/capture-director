@@ -1,0 +1,348 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-27T23:30:03.962539+00:00",
+  "title": "Design System: Capture director website",
+  "extensions": {
+    "colorMeta": {
+      "citron": {
+        "role": "primary",
+        "displayName": "Citron",
+        "tonalRamp": [
+          "oklch(15% 0.18 102)",
+          "oklch(26% 0.18 102)",
+          "oklch(38% 0.18 102)",
+          "oklch(49% 0.18 102)",
+          "oklch(61% 0.18 102)",
+          "oklch(72% 0.18 102)",
+          "oklch(84% 0.18 102)",
+          "oklch(95% 0.18 102)"
+        ]
+      },
+      "pool": {
+        "role": "secondary",
+        "displayName": "Pool",
+        "tonalRamp": [
+          "oklch(15% 0.035 215)",
+          "oklch(26% 0.035 215)",
+          "oklch(38% 0.035 215)",
+          "oklch(49% 0.035 215)",
+          "oklch(61% 0.035 215)",
+          "oklch(72% 0.035 215)",
+          "oklch(84% 0.035 215)",
+          "oklch(95% 0.035 215)"
+        ]
+      },
+      "mulberry": {
+        "role": "primary",
+        "displayName": "Mulberry",
+        "tonalRamp": [
+          "oklch(15% 0.1 340)",
+          "oklch(26% 0.1 340)",
+          "oklch(38% 0.1 340)",
+          "oklch(49% 0.1 340)",
+          "oklch(61% 0.1 340)",
+          "oklch(72% 0.1 340)",
+          "oklch(84% 0.1 340)",
+          "oklch(95% 0.1 340)"
+        ]
+      },
+      "mulberry-deep": {
+        "role": "primary",
+        "displayName": "Deep mulberry",
+        "tonalRamp": [
+          "oklch(15% 0.08 340)",
+          "oklch(26% 0.08 340)",
+          "oklch(38% 0.08 340)",
+          "oklch(49% 0.08 340)",
+          "oklch(61% 0.08 340)",
+          "oklch(72% 0.08 340)",
+          "oklch(84% 0.08 340)",
+          "oklch(95% 0.08 340)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "tonalRamp": [
+          "oklch(15% 0.04 330)",
+          "oklch(26% 0.04 330)",
+          "oklch(38% 0.04 330)",
+          "oklch(49% 0.04 330)",
+          "oklch(61% 0.04 330)",
+          "oklch(72% 0.04 330)",
+          "oklch(84% 0.04 330)",
+          "oklch(95% 0.04 330)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "tonalRamp": [
+          "oklch(15% 0.03 215)",
+          "oklch(26% 0.03 215)",
+          "oklch(38% 0.03 215)",
+          "oklch(49% 0.03 215)",
+          "oklch(61% 0.03 215)",
+          "oklch(72% 0.03 215)",
+          "oklch(84% 0.03 215)",
+          "oklch(95% 0.03 215)"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "tonalRamp": [
+          "oklch(15% 0.015 95)",
+          "oklch(26% 0.015 95)",
+          "oklch(38% 0.015 95)",
+          "oklch(49% 0.015 95)",
+          "oklch(61% 0.015 95)",
+          "oklch(72% 0.015 95)",
+          "oklch(84% 0.015 95)",
+          "oklch(95% 0.015 95)"
+        ]
+      },
+      "citron-hover": {
+        "role": "primary",
+        "displayName": "Citron hover",
+        "tonalRamp": [
+          "oklch(15% 0.14 102)",
+          "oklch(26% 0.14 102)",
+          "oklch(38% 0.14 102)",
+          "oklch(49% 0.14 102)",
+          "oklch(61% 0.14 102)",
+          "oklch(72% 0.14 102)",
+          "oklch(84% 0.14 102)",
+          "oklch(95% 0.14 102)"
+        ]
+      },
+      "citron-copy": {
+        "role": "neutral",
+        "displayName": "Citron copy",
+        "tonalRamp": [
+          "oklch(15% 0.06 345)",
+          "oklch(26% 0.06 345)",
+          "oklch(38% 0.06 345)",
+          "oklch(49% 0.06 345)",
+          "oklch(61% 0.06 345)",
+          "oklch(72% 0.06 345)",
+          "oklch(84% 0.06 345)",
+          "oklch(95% 0.06 345)"
+        ]
+      },
+      "dark-copy": {
+        "role": "neutral",
+        "displayName": "Dark field copy",
+        "tonalRamp": [
+          "oklch(15% 0.04 340)",
+          "oklch(26% 0.04 340)",
+          "oklch(38% 0.04 340)",
+          "oklch(49% 0.04 340)",
+          "oklch(61% 0.04 340)",
+          "oklch(72% 0.04 340)",
+          "oklch(84% 0.04 340)",
+          "oklch(95% 0.04 340)"
+        ]
+      },
+      "code": {
+        "role": "neutral",
+        "displayName": "Code",
+        "tonalRamp": [
+          "oklch(15% 0.02 340)",
+          "oklch(26% 0.02 340)",
+          "oklch(38% 0.02 340)",
+          "oklch(49% 0.02 340)",
+          "oklch(61% 0.02 340)",
+          "oklch(72% 0.02 340)",
+          "oklch(84% 0.02 340)",
+          "oklch(95% 0.02 340)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Static hero phrases, no entrance. Wrapper line-height 1.08; desktop clamp(5rem, 8.6vw, 8rem), compact clamp(4rem, 8.5vw, 6rem), mobile clamp(3.25rem, 17vw, 6rem). Two Latin WOFF2 files are preloaded with font-display:block; motion starts after fonts.ready."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings."
+      }
+    },
+    "shadows": [
+      {
+        "name": "film",
+        "value": "0 30px 50px -30px #481005aa",
+        "purpose": "Media framing."
+      },
+      {
+        "name": "process",
+        "value": "0 24px 48px -30px #151c1d77",
+        "purpose": "Media framing."
+      },
+      {
+        "name": "playback",
+        "value": "0 8px 35px #0005",
+        "purpose": "Media framing."
+      },
+      {
+        "name": "export",
+        "value": "0 8px 30px #0006",
+        "purpose": "Media framing."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ui-out",
+        "value": "cubic-bezier(.23,1,.32,1)",
+        "purpose": "Emil Kowalski strong ease-out for story assembly."
+      },
+      {
+        "name": "ui-move",
+        "value": "cubic-bezier(.77,0,.175,1)",
+        "purpose": "Story wipes and phase changes."
+      },
+      {
+        "name": "control-surface",
+        "value": "160ms",
+        "purpose": "Background and color feedback without control movement."
+      },
+      {
+        "name": "control-inset",
+        "value": "120ms",
+        "purpose": "Inset press feedback."
+      },
+      {
+        "name": "desktop-pin",
+        "value": "2400px",
+        "purpose": "Full-width workflow pin:true, scrub 0.35; minimum 900px width and 720px height."
+      },
+      {
+        "name": "mobile-process",
+        "value": "scrub 0.25",
+        "purpose": "Unpinned stage story below desktop width or height."
+      },
+      {
+        "name": "media-load-margin",
+        "value": "1000px",
+        "purpose": "Load the silent story derivative near the workflow, motion permitted."
+      },
+      {
+        "name": "reduced-copy-feedback",
+        "value": "160ms opacity",
+        "purpose": "Confirmation without spatial movement."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile-max",
+        "value": "600px"
+      },
+      {
+        "name": "tablet-max",
+        "value": "899px"
+      },
+      {
+        "name": "pin-min",
+        "value": "900px"
+      },
+      {
+        "name": "compact-desktop-max",
+        "value": "1100px"
+      },
+      {
+        "name": "wide-min",
+        "value": "1352px"
+      },
+      {
+        "name": "large-min",
+        "value": "1500px"
+      },
+      {
+        "name": "pin-height-min",
+        "value": "720px"
+      },
+      {
+        "name": "compact-story-height-max",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary action from the implemented marketing surface.",
+      "html": "<a class=\"ds-action\" href=\"#\">Download the source</a>",
+      "css": ".ds-action{display:inline-flex;align-items:center;justify-content:center;gap:28px;padding:18px 23px;border-radius:8px;font:650 .9rem 'Manrope Variable',sans-serif;text-decoration:none;transition:background 160ms ease,color 160ms ease,box-shadow 120ms ease;background:var(--ink,#4c1637);color:var(--white,#fbf9ef)}.ds-action:hover{background:var(--red-dark,#321025)}.ds-action:focus-visible{outline:3px solid currentColor;outline-offset:6px}@media(prefers-reduced-motion:reduce){.ds-action{transition:none}}.ds-action:active{box-shadow:inset 0 0 0 2px currentColor}"
+    },
+    {
+      "name": "Hero action",
+      "kind": "button",
+      "refersTo": "button-hero",
+      "description": "Hero action from the implemented marketing surface.",
+      "html": "<a class=\"ds-action\" href=\"#\">Download the source</a>",
+      "css": ".ds-action{display:inline-flex;align-items:center;justify-content:center;gap:28px;padding:18px 23px;border-radius:8px;font:650 .9rem 'Manrope Variable',sans-serif;text-decoration:none;transition:background 160ms ease,color 160ms ease,box-shadow 120ms ease;background:var(--ink,#4c1637);color:var(--citron,#e5d935)}.ds-action:hover{background:var(--red-dark,#321025)}.ds-action:focus-visible{outline:3px solid currentColor;outline-offset:6px}@media(prefers-reduced-motion:reduce){.ds-action{transition:none}}.ds-action:active{box-shadow:inset 0 0 0 2px currentColor}"
+    },
+    {
+      "name": "Light action",
+      "kind": "button",
+      "refersTo": "button-light",
+      "description": "Light action from the implemented marketing surface.",
+      "html": "<a class=\"ds-action\" href=\"#\">Download the source</a>",
+      "css": ".ds-action{display:inline-flex;align-items:center;justify-content:center;gap:28px;padding:18px 23px;border-radius:8px;font:650 .9rem 'Manrope Variable',sans-serif;text-decoration:none;transition:background 160ms ease,color 160ms ease,box-shadow 120ms ease;background:var(--citron,#e5d935);color:var(--ink,#4c1637)}.ds-action:hover{background:#f2e966}.ds-action:focus-visible{outline:3px solid currentColor;outline-offset:6px}@media(prefers-reduced-motion:reduce){.ds-action{transition:none}}.ds-action:active{box-shadow:inset 0 0 0 2px currentColor}"
+    },
+    {
+      "name": "Process panel",
+      "kind": "card",
+      "refersTo": "process-panel",
+      "description": "Stable mulberry stage for shot list, actual scroll-seeked footage, illustrative timeline assembly, and export receipt. Static code preview shown here.",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-chrome\">shots.yaml</div><pre>shots:\n  - id: blog-tour</pre></div>",
+      "css": ".ds-panel{background:var(--ink,#4c1637);color:var(--paper,#d4e9ed);border-radius:4px;overflow:hidden;box-shadow:0 24px 48px -30px #151c1d77}.ds-chrome{padding:17px 22px;border-bottom:1px solid #ffffff20;font: .69rem 'Manrope Variable',sans-serif}.ds-panel pre{padding:24px 26px;margin:0;font: .78rem/1.95 ui-monospace,monospace;color:#f3e8ed}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "description": "Navigation from the implemented marketing surface.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\">The demo</a><a href=\"#\">How it works</a><a href=\"#\">GitHub</a></nav>",
+      "css": ".ds-nav{display:flex;gap:32px;padding:24px;background:var(--citron,#e5d935);color:var(--ink,#4c1637);font:600 .83rem 'Manrope Variable',sans-serif}.ds-nav a{color:inherit;text-decoration:none}.ds-nav a:hover{color:var(--red,#4c1637)}.ds-nav a:focus-visible{outline:3px solid currentColor;outline-offset:6px}@media(max-width:600px){.ds-nav a:not(:last-child){display:none}}"
+    },
+    {
+      "name": "FAQ disclosure",
+      "kind": "custom",
+      "description": "Native disclosure with Lucide Plus and progressive height animation.",
+      "html": "<details class=\"ds-faq\"><summary>What do I need?<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M12 5v14M5 12h14\"/></svg></summary><p>Review the setup guide before recording.</p></details>",
+      "css": ".ds-faq{color:var(--ink,#4c1637);border-block:1px solid var(--line,#b6cdd2);font-family:\"Manrope Variable\",sans-serif}.ds-faq summary{display:flex;align-items:center;justify-content:space-between;gap:28px;list-style:none;cursor:pointer;padding:25px 0;font-size:.95rem;font-weight:650}.ds-faq summary::-webkit-details-marker{display:none}.ds-faq svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;transition:transform 200ms cubic-bezier(.23,1,.32,1)}.ds-faq[open] svg{transform:rotate(45deg)}.ds-faq summary:focus-visible{outline:3px solid currentColor;outline-offset:6px}.ds-faq p{font-size:.88rem;line-height:1.85;padding:0 30px 26px 0;color:var(--muted,#695164)}@supports(interpolate-size:allow-keywords){.ds-faq{interpolate-size:allow-keywords}.ds-faq::details-content{overflow:clip;block-size:0;opacity:0;transition:block-size 200ms cubic-bezier(.23,1,.32,1),opacity 200ms ease,content-visibility 200ms allow-discrete}.ds-faq[open]::details-content{block-size:auto;opacity:1}}@media(prefers-reduced-motion:reduce){.ds-faq svg,.ds-faq::details-content{transition:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Working film treatment",
+    "overview": "The implemented website uses a working film treatment: oversized titles, broad color fields, viewfinder corners, and a compact editing timeline. It's a marketing surface for builders using Codex or Claude Code, implemented directly in Astro with GSAP. This system belongs to the website; it doesn't prescribe the CLI's interface.\n\nThe final cascade in `src/styles/global.css` is authoritative. Earlier declarations include superseded radius, palette, and hero measurements; don't restore them when extending the page. `SURFACE.md` records the approved first surface, and `../PRODUCT.md` carries product facts.",
+    "keyCharacteristics": [
+      "Citron, pool, and mulberry color fields",
+      "Self-hosted Bricolage Grotesque and Manrope",
+      "Real footage and an illustrated write, record, edit, export sequence",
+      "Readable static content before animation"
+    ],
+    "rules": [
+      {
+        "name": "The Three Inks Rule",
+        "body": "Keep the broad fields citron, pool, and mulberry; supporting colors serve copy, dividers, and footage chrome.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do retain the citron, pool, and mulberry identity.",
+      "Do use the existing real demo and its poster as product evidence.",
+      "Do keep all workflow instructions readable without animation.",
+      "Do preserve visible keyboard focus and native video controls."
+    ],
+    "donts": [
+      "Don't return to the rejected warm paper and recording red palette.",
+      "Don't add generated raster artwork or invented social proof.",
+      "Don't require pinned scrolling on mobile or with reduced motion.",
+      "Don't extend website styling into the CLI without a separate decision."
+    ]
+  }
+}
