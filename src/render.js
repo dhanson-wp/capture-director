@@ -18,7 +18,7 @@ function transitionOf(spec, fallback) {
 	return { type, duration: finite(spec.duration ?? fallback.duration, 'transition duration', { min: 0 }) };
 }
 
-export async function render(file, { output } = {}) {
+export async function render(file, { output, captions = true } = {}) {
 	const tl = await loadYaml(file);
 	const [OW, OH] = parseSize(tl.size);
 	const fps = finite(tl.fps ?? 30, 'fps', { min: 1, max: 120 });
@@ -59,7 +59,7 @@ export async function render(file, { output } = {}) {
 				throw new Error(`Timeline item ${i} needs clip, card, or end`);
 			}
 			const item = items[items.length - 1];
-			if (raw.caption) {
+			if (captions && raw.caption) {
 				browser ??= await launch();
 				const spec = { ...captionDefaults, ...(typeof raw.caption === 'string' ? { text: raw.caption } : raw.caption) };
 				if (spec.font) spec.font = resolveFrom(file, spec.font);
