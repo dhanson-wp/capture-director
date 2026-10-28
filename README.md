@@ -16,6 +16,8 @@ Here's what it made from one shot list and one timeline: a 31 second tour of the
 - ffmpeg with libx264 (`brew install ffmpeg`)
 
 ```bash
+git clone https://github.com/dhanson-wp/capture-director.git
+cd capture-director
 npm install
 npm link   # optional, puts capture-director on your PATH
 ```
@@ -145,10 +147,10 @@ Any clip or card can carry a `caption`: a short line drawn over the footage, whi
 caption: { position: bottom-left, opacity: 0.7, size: 28, margin: 72 }   # font defaults to monoFont
 items:
   - clip: out/home/home.mp4
-    caption: { text: "Writing, notes, and projects", start: 1.2, end: 8, plate: "rgba(20,19,18,0.72)" }
+    caption: { text: "Writing, notes, and projects", start: 1.2, end: 8, opacity: 1, plate: "rgba(20,19,18,0.72)" }
 ```
 
-Caption fields: `text`, `start` and `end` (seconds into the item; defaults leave 0.6 s at each end), `fade`, `position` (`bottom-left`, `bottom-right`, `top-left`, or `top-right`), `size`, `opacity`, `color`, `margin`, `weight`, `shadow`, `plate` (a backing color for busy or light footage), and `font`. A plain string works too: `caption: Every post, in one place.`
+Caption fields: `text`, `start` and `end` (seconds into the item; defaults leave 0.6 s at each end), `fade`, `position` (`bottom-left`, `bottom-right`, `top-left`, or `top-right`), `size`, `opacity`, `color`, `margin`, `weight`, `shadow`, `plate` (a backing color for busy or light footage), and `font`. `opacity` (0.7 by default) fades the plate along with the text, so set it to 1 when you use a plate, and pick a plate color that contrasts with the page rather than one that matches its background. A plain string works too: `caption: Every post, in one place.`
 
 Card fields: `kicker`, `title`, `subtitle`, `url`, `duration`, `align` (`center` or `left`), `background`, `color`, `muted`, `titleSize`, `subtitleSize`, `weight`, `stretch`, `font`, `fontFamily`, and `monoFont`.
 

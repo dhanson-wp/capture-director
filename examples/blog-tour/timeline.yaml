@@ -4,14 +4,14 @@ size: 1920x1080
 fps: 30
 
 card: { background: "#151515", color: "#f2efe9" }
-caption: { position: bottom-left, opacity: 0.8, size: 28, plate: "rgba(21,21,21,0.75)" }
+caption: { position: bottom-left, size: 28, opacity: 1, color: "#151515", plate: "#f2efe9" }
 transition: { type: fade, duration: 0.6 }
 fade: { in: 0.5, out: 1.0 }
 
 items:
   - card:
       kicker: derekhanson.blog
-      title: A block building playground
+      title: A short tour of my blog
       duration: 2.5
   - clip: out/home/home.mp4
     caption: Writing, notes, and projects
