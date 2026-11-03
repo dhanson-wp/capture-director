@@ -18,6 +18,14 @@ enum SelfTest {
         // Print each line at once, so a crash keeps the lines before it.
         setvbuf(stdout, nil, _IOLBF, 0)
         Task {
+            // The self-test stars, retitles, moves, and forgets captures. Never on the real library.
+            if LibraryHome.isReal(model.store.home.path) {
+                print("SELFTEST FAIL refusing to run on the real library at \(model.store.home.path). "
+                      + "Set CD_HOME to a folder in /tmp, or use tools/selftest.sh.")
+                finish(code: 1)
+                return
+            }
+            for window in NSApp.windows { window.setFrameAutosaveName("") }
             try? await Task.sleep(for: .seconds(0.5))
             check("titles are cleaned", ItemTitle.clean("  Buy   milk ") == "Buy milk")
             await browsing(model)
@@ -219,6 +227,13 @@ enum SelfTest {
         check("a new title saves", current(gallery.id)?.title == "Gallery scroll, take two", store.problem ?? "")
         await store.setNotes(gallery.id, "Use this one on the launch post.")
         check("notes save", current(gallery.id)?.notes == "Use this one on the launch post.", store.problem ?? "")
+        // Two writes handed in at once both land, in order: the second waits for the first.
+        let first = Task { await store.setTitle(gallery.id, "First title") }
+        let second = Task { await store.setNotes(gallery.id, "Second, after the title.") }
+        _ = await (first.value, second.value)
+        check("two writes at once both land",
+              current(gallery.id)?.title == "First title" && current(gallery.id)?.notes == "Second, after the title.",
+              "title \(current(gallery.id)?.title ?? "nil"), notes \(current(gallery.id)?.notes ?? "nil")")
         let ids = three.map(\.id)
         await store.setProject(ids, "Launch week")
         check("Move to folder moves all three into a new folder",

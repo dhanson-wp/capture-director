@@ -21,6 +21,10 @@ final class LibraryStore {
     @ObservationIgnored private let file: URL
     @ObservationIgnored private let cli: CLI?
     @ObservationIgnored private var watcher: LibraryWatcher?
+    @ObservationIgnored private let writes = SerialRunner()
+
+    /// The folder library.json lives in.
+    var home: URL { file.deletingLastPathComponent() }
 
     /// The CLI is set up, so changes can be written.
     var canWrite: Bool { cli != nil }
@@ -92,19 +96,23 @@ final class LibraryStore {
     }
 
     /// Runs the CLI off the main actor, then reloads. A failure becomes `problem`.
+    /// Writes run one at a time in the order they were asked for: the CLI
+    /// rewrites library.json without a lock, so two at once could lose one.
     private func write(_ args: [String]) async {
         guard let cli else {
             problem = CLIError.notInstalled.message
             return
         }
-        do {
-            _ = try await cli.run(args)
-            problem = nil
-            reload()
-        } catch let error as CLIError {
-            problem = error.message
-        } catch {
-            problem = error.localizedDescription
+        await writes.run { [weak self] in
+            do {
+                _ = try await cli.run(args)
+                self?.problem = nil
+                self?.reload()
+            } catch let error as CLIError {
+                self?.problem = error.message
+            } catch {
+                self?.problem = error.localizedDescription
+            }
         }
     }
 }

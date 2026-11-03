@@ -112,6 +112,18 @@ struct BrowserCommands: Commands {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Self-test and snapshot runs move and resize the window. This puts the
+    /// saved frames and split-view widths back on quit, so a test run never
+    /// changes how the app opens next time.
+    private var windowDefaults: DefaultsGuard?
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if SelfTest.requested || Snapshot.requested {
+            windowDefaults = DefaultsGuard(.standard, prefixes: ["NSWindow Frame", "NSSplitView Subview Frames",
+                                                                 "NSToolbar Configuration"])
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Started from a terminal, the process is not a foreground app yet.
         NSApp.setActivationPolicy(.regular)
@@ -122,6 +134,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The self-test's result becomes the exit code, after a normal quit.
     func applicationWillTerminate(_ notification: Notification) {
+        if let windowDefaults {
+            // Windows don't save frames after this; their autosave is off in these modes.
+            for window in NSApp.windows { window.setFrameAutosaveName("") }
+            windowDefaults.restore()
+            UserDefaults.standard.synchronize()
+        }
         if SelfTest.requested { exit(SelfTest.exitCode) }
     }
 }

@@ -70,6 +70,9 @@ enum Snapshot {
         model.store.library = library
     }
 
+    /// APP_SNAPSHOT is set: this run takes snapshots and quits.
+    static var requested: Bool { !(ProcessInfo.processInfo.environment["APP_SNAPSHOT"] ?? "").isEmpty }
+
     static func runIfRequested(model: AppModel, openSettings: OpenSettingsAction) {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["APP_SNAPSHOT"], !dir.isEmpty else { return }
@@ -84,6 +87,8 @@ enum Snapshot {
                                         IOPMAssertionLevel(kIOPMAssertionLevelOn), "Snapshots" as CFString, &awake)
             try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             try? await Task.sleep(for: .seconds(1.5))
+            // Pages resize the window; keep that out of the frame the app reopens with.
+            for window in NSApp.windows { window.setFrameAutosaveName("") }
             let library = model.store.library
             for mode in ["light", "dark"] {
                 NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
