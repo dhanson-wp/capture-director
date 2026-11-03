@@ -71,3 +71,39 @@ private func write(_ json: String) throws -> URL {
     #expect(LibraryReader.file(cdHome: "/h").path == "/h/library.json")
     #expect(LibraryReader.file(cdHome: nil).path.hasSuffix("/.capture-director/library.json"))
 }
+
+@Test func brokenEntryIsSkippedAndCounted() throws {
+    let url = try write("""
+    { "entries": [ { "id": "a", "file": "/a.mp4", "title": "A", "kind": "video" },
+      { "id": "b", "title": "no file" }, 42 ] }
+    """)
+    let lib = try LibraryReader.load(from: url)
+    #expect(lib.entries.count == 1)
+    #expect(lib.skipped == 2)
+}
+
+@Test func wrongTypedFieldsFallBack() throws {
+    let url = try write("""
+    { "entries": [ { "id": "a", "file": "/x/My Clip.mp4", "title": 7, "kind": 1, "starred": "yes", "notes": 3 } ] }
+    """)
+    let lib = try LibraryReader.load(from: url)
+    let e = try #require(lib.entries.first)
+    #expect(e.starred == false)
+    #expect(e.title == "My Clip")
+    #expect(e.kind == "video")
+    #expect(e.notes == "")
+    #expect(lib.skipped == 0)
+}
+
+@Test func malformedFoldersCountsAsSkipped() throws {
+    let url = try write(#"{ "entries": [], "folders": "nope", "renames": [1] }"#)
+    let lib = try LibraryReader.load(from: url)
+    #expect(lib.folders == [])
+    #expect(lib.renames == [:])
+    #expect(lib.skipped == 2)
+}
+
+@Test func malformedJSONThrows() throws {
+    let url = try write("{not json")
+    #expect(throws: (any Error).self) { try LibraryReader.load(from: url) }
+}

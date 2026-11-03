@@ -38,11 +38,12 @@ public struct LibraryEntry: Codable, Identifiable, Hashable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         file = try c.decode(String.self, forKey: .file)
-        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        let name = ((file as NSString).lastPathComponent as NSString).deletingPathExtension
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? name
         project = try? c.decodeIfPresent(String.self, forKey: .project)
-        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "video"
-        starred = try c.decodeIfPresent(Bool.self, forKey: .starred) ?? false
-        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? "video"
+        starred = (try? c.decodeIfPresent(Bool.self, forKey: .starred)) ?? false
+        notes = (try? c.decodeIfPresent(String.self, forKey: .notes)) ?? ""
         added = Self.lenientDate(c, .added)
         updated = Self.lenientDate(c, .updated)
         source = try? c.decodeIfPresent(String.self, forKey: .source)
@@ -75,8 +76,11 @@ public struct Library: Sendable, Equatable {
     public var entries: [LibraryEntry]
     public var folders: [String]
     public var renames: [String: String]
+    /// Entries (and a malformed folders or renames list, once each) that couldn't be read.
+    public var skipped: Int
 
-    public init(entries: [LibraryEntry] = [], folders: [String] = [], renames: [String: String] = [:]) {
+    public init(entries: [LibraryEntry] = [], folders: [String] = [], renames: [String: String] = [:], skipped: Int = 0) {
+        self.skipped = skipped
         self.entries = entries
         self.folders = folders
         self.renames = renames
@@ -91,23 +95,33 @@ public enum LibraryReader {
         return URL(fileURLWithPath: home).appendingPathComponent("library.json")
     }
 
-    /// A missing file is an empty library. An entry that can't decode is skipped.
+    /// A missing file is an empty library. Entries that can't be read are
+    /// skipped and counted in `skipped`. Malformed JSON throws.
     public static func load(from url: URL) throws -> Library {
         guard FileManager.default.fileExists(atPath: url.path) else { return Library() }
         let data = try Data(contentsOf: url)
         let raw = try JSONDecoder().decode(Raw.self, from: data)
-        return Library(entries: raw.entries.compactMap(\.entry), folders: raw.folders ?? [], renames: raw.renames ?? [:])
+        let entries = raw.entries.compactMap(\.entry)
+        return Library(entries: entries, folders: raw.folders, renames: raw.renames,
+                       skipped: raw.entries.count - entries.count + raw.badLists)
     }
 
     private struct Raw: Decodable {
-        var entries: [Lossy]
-        var folders: [String]?
-        var renames: [String: String]?
+        var entries: [Lossy] = []
+        var folders: [String] = []
+        var renames: [String: String] = [:]
+        var badLists = 0
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
-            entries = try c.decodeIfPresent([Lossy].self, forKey: .entries) ?? []
-            folders = try? c.decodeIfPresent([String].self, forKey: .folders)
-            renames = try? c.decodeIfPresent([String: String].self, forKey: .renames)
+            if c.contains(.entries) {
+                if let e = try? c.decode([Lossy].self, forKey: .entries) { entries = e } else { badLists += 1 }
+            }
+            if c.contains(.folders) {
+                if let f = try? c.decode([String].self, forKey: .folders) { folders = f } else { badLists += 1 }
+            }
+            if c.contains(.renames) {
+                if let r = try? c.decode([String: String].self, forKey: .renames) { renames = r } else { badLists += 1 }
+            }
         }
         enum Keys: String, CodingKey { case entries, folders, renames }
     }
