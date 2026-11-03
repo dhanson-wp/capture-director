@@ -1,9 +1,9 @@
 import AppKit
 import CaptureDirectorKit
 
-/// Self-test for agents: runs the app's real functions on a test store,
+/// Self-test for agents: runs the app's real functions against a scratch library,
 /// prints PASS or FAIL per check, and quits with exit code 0 or 1.
-///   APP_STORE=/tmp/CaptureDirector-self.store "$HOME/Applications/Capture Director.app/Contents/MacOS/CaptureDirector" --selftest
+///   CD_HOME=/tmp/CaptureDirector-self "$HOME/Applications/Capture Director.app/Contents/MacOS/CaptureDirector" --selftest
 /// (tools/selftest.sh does this.) Add a check for every story with logic.
 @MainActor
 enum SelfTest {
@@ -17,11 +17,6 @@ enum SelfTest {
         guard requested else { return }
         // Print each line at once, so a crash keeps the lines before it.
         setvbuf(stdout, nil, _IOLBF, 0)
-        guard Store.isOverridden else {
-            print("SELFTEST refused: set APP_STORE to a file in /tmp")
-            finish(code: 1)
-            return
-        }
         Task {
             try? await Task.sleep(for: .seconds(0.5))
             check("titles are cleaned", ItemTitle.clean("  Buy   milk ") == "Buy milk")

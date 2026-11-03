@@ -3,7 +3,7 @@ import IOKit.pwr_mgt
 import SwiftUI
 
 /// Screenshot mode for agents.
-///   APP_STORE=/tmp/test.store APP_SNAPSHOT=/tmp/shots "$HOME/Applications/Capture Director.app/Contents/MacOS/CaptureDirector"
+///   CD_HOME=/tmp/cd-test APP_SNAPSHOT=/tmp/shots "$HOME/Applications/Capture Director.app/Contents/MacOS/CaptureDirector"
 /// writes main-light.png and main-dark.png for the main window, and
 /// settings-<tab>-light.png and settings-<tab>-dark.png for every Settings tab, then quits.
 /// Each PNG gets a main-<mode>-layout.json with the grid probes (tools/check-layout.swift).
@@ -13,12 +13,6 @@ enum Snapshot {
     static func runIfRequested(model: AppModel, openSettings: OpenSettingsAction) {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["APP_SNAPSHOT"], !dir.isEmpty else { return }
-        // Snapshots never run against the real database.
-        guard Store.isOverridden else {
-            print("SNAPSHOT refused: set APP_STORE to a file in /tmp")
-            NSApp.terminate(nil)
-            return
-        }
         let only = env["APP_SNAPSHOT_PAGES"].map { Set($0.split(separator: ",").map(String.init)) }
         Task {
             // A sleeping display gives screencapture nothing. Declaring user
