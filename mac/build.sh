@@ -54,7 +54,12 @@ if [[ -n "${CD_CONFIG_JSON:-}" ]]; then
   print -r -- "$CD_CONFIG_JSON" > "$app/Contents/Resources/config.json"
 fi
 xattr -cr "$app"
-codesign --force --sign "$identity" "$app" 2>&1 | grep -v "replacing existing signature" || true
+sign_log=$(codesign --force --sign "$identity" "$app" 2>&1) || {
+  echo "$sign_log" >&2
+  echo "build failed: could not sign the app" >&2
+  exit 1
+}
+print -r -- "$sign_log" | grep -v "replacing existing signature" >&2 || true
 echo "installed $app (signed: ${identity})"
 
 if [[ " $* " == *" --open "* ]]; then

@@ -26,7 +26,7 @@ struct AppearanceSettings: View {
     }
 }
 
-/// A small sample window in the chosen accent: a sidebar, two tasks, a tag,
+/// A small sample window in the chosen accent: a sidebar, two captures, a tag,
 /// a button, and a switch. It redraws as people pick a color.
 /// Swap the sample words for ones from this app.
 private struct AccentPreview: View {
@@ -56,9 +56,9 @@ private struct AccentPreview: View {
             }
             .padding(.leading, Space.xs)
             .padding(.bottom, Space.sm)
-            sidebarRow("Inbox", symbol: "tray", selected: true)
-            sidebarRow("Today", symbol: "star", selected: false)
-            sidebarRow("Done", symbol: "checkmark.circle", selected: false)
+            sidebarRow("All captures", symbol: "tray", selected: true)
+            sidebarRow("Recent", symbol: "clock", selected: false)
+            sidebarRow("Starred", symbol: "star", selected: false)
             Spacer(minLength: 0)
         }
         .padding(Space.sm)
@@ -79,17 +79,17 @@ private struct AccentPreview: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Inbox").font(.headline)
+                Text("All captures").font(.headline)
                 Spacer()
                 Text("1 left").font(.caption).foregroundStyle(Palette.accentText)
             }
-            task("Pick a color", done: true)
-            task("Ship the first build", done: false, tag: "Today")
+            task("Pricing page tour", done: true)
+            task("Blog tour", done: false, tag: "Recent")
             Spacer(minLength: 0)
             // Drawn, not real controls: the preview is a picture, and real
             // controls turn gray when the window is not in front.
             HStack {
-                Label("Add Task", systemImage: "plus")
+                Label("New folder", systemImage: "plus")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(Palette.onAccent)
                     .padding(.horizontal, Space.md)

@@ -8,7 +8,7 @@ A native macOS app in SwiftUI. It drives the capture-director CLI. Command Line 
 - `Sources/CaptureDirectorKit/` rules and data logic with no SwiftUI. Tests in `Tests/CaptureDirectorKitTests/`.
 - `Package.swift` a Swift package. There is no Xcode project.
 - `build.sh` builds, signs, and installs `$CD_APP_DIR/Capture Director.app` (default `~/Applications`); `capture-director install-app` runs it.
-- `Icon/AppIcon.iconset` the app icon: ten PNG sizes rendered from `ui/icon.svg`. `tools/make_icon.sh` turns it into `Resources/AppIcon.icns` with `iconutil`.
+- `Icon/AppIcon.iconset` the app icon: ten PNG sizes rendered from `ui/icon.svg`. `tools/make_icon.sh` turns it into `Resources/AppIcon.icns` with `iconutil`. To redraw the PNGs (transparent corners, artwork at 824 of 1024 points), run `swift mac/tools/render_icon.swift` from the repo root.
 - `docs/` the brief, the screen index, and the user stories, when they exist.
 
 ## Build and check
