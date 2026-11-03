@@ -22,14 +22,44 @@ export function home() {
 }
 const dbFile = () => path.join(home(), 'library.json');
 const thumbDir = () => path.join(home(), 'thumbs');
-const idFor = (file) => createHash('sha256').update(file).digest('hex').slice(0, 16);
+export const idFor = (file) => createHash('sha256').update(file).digest('hex').slice(0, 16);
+
+// "a / b/" becomes "a/b". The top level ("Unsorted") is the empty path.
+export function normalizeFolder(p) {
+	const out = String(p ?? '').split('/').map((s) => s.trim()).filter(Boolean).join('/');
+	if (out.length > 300) throw new Error('Folder names can be at most 300 characters');
+	return out === 'Unsorted' ? '' : out;
+}
+
+// Every folder the app should show: the ones made on purpose, plus each parent of a clip's folder.
+export function folderPaths(db) {
+	const all = new Set((db.folders || []).map(normalizeFolder).filter(Boolean));
+	for (const e of db.entries) {
+		const parts = normalizeFolder(e.project).split('/').filter(Boolean);
+		for (let i = 1; i <= parts.length; i++) all.add(parts.slice(0, i).join('/'));
+	}
+	return [...all].sort();
+}
+
+// Folders renamed in the Mac app. New clips follow the rename instead of recreating the old folder.
+function renamed(project, renames) {
+	for (const key of Object.keys(renames).sort((a, b) => b.length - a.length)) {
+		if (project === key) return renames[key];
+		if (project.startsWith(`${key}/`)) return renames[key] + project.slice(key.length);
+	}
+	return project;
+}
 
 export async function load() {
 	try {
 		const db = JSON.parse(await readFile(dbFile(), 'utf8'));
-		return { entries: Array.isArray(db.entries) ? db.entries : [] };
+		return {
+			entries: Array.isArray(db.entries) ? db.entries : [],
+			folders: Array.isArray(db.folders) ? db.folders : [],
+			renames: db.renames && typeof db.renames === 'object' && !Array.isArray(db.renames) ? db.renames : {},
+		};
 	} catch (err) {
-		if (err.code === 'ENOENT') return { entries: [] };
+		if (err.code === 'ENOENT') return { entries: [], folders: [], renames: {} };
 		throw new Error(`Can't read ${dbFile()}: ${err.message}`);
 	}
 }
@@ -38,23 +68,27 @@ export async function load() {
 async function save(db) {
 	await mkdir(home(), { recursive: true, mode: 0o700 });
 	const tmp = `${dbFile()}.${process.pid}.tmp`;
-	await writeFile(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
+	await writeFile(tmp, JSON.stringify({ ...db, folders: folderPaths(db) }, null, 2), { mode: 0o600 });
 	await rename(tmp, dbFile());
 }
 
 // Add or refresh a video. Edits made in the library (title, project, star, notes) are kept.
-export async function add(file, { kind = 'video', title, project, source, shot } = {}) {
+export async function add(file, { kind = 'video', title, project, source, shot, url } = {}) {
 	file = path.resolve(file);
 	const info = await probe(file);
+	const { size } = await stat(file);
 	const db = await load();
 	const now = new Date().toISOString();
 	let entry = db.entries.find((e) => e.file === file);
 	if (!entry) {
+		// Two paths hashing to one id is unlikely, but an id must never point at two files.
+		let id = idFor(file);
+		while (db.entries.some((e) => e.id === id)) id = randomBytes(8).toString('hex');
 		entry = {
-			id: idFor(file),
+			id,
 			file,
 			title: title || path.basename(file).replace(VIDEO, ''),
-			project: project || path.basename(path.dirname(source || file)),
+			project: renamed(normalizeFolder(project || path.basename(path.dirname(source || file))), db.renames) || 'Unsorted',
 			kind,
 			starred: false,
 			notes: '',
@@ -63,7 +97,8 @@ export async function add(file, { kind = 'video', title, project, source, shot }
 		db.entries.push(entry);
 	}
 	Object.assign(entry, { kind, source: source ? path.resolve(source) : entry.source, shot: shot ?? entry.shot, updated: now });
-	Object.assign(entry, { duration: info.duration, width: info.width, height: info.height, hasAudio: info.hasAudio });
+	Object.assign(entry, { duration: info.duration, width: info.width, height: info.height, hasAudio: info.hasAudio, size });
+	if (url) entry.url = url;
 	await save(db);
 	await rm(path.join(thumbDir(), `${entry.id}.jpg`), { force: true });
 	return entry;
@@ -218,7 +253,7 @@ function applyEdits(entry, body) {
 		return v.trim();
 	};
 	if ('title' in body) entry.title = text(body.title, 200, 'title') || entry.title;
-	if ('project' in body) entry.project = text(body.project, 100, 'project') || 'Unsorted';
+	if ('project' in body) entry.project = normalizeFolder(text(body.project, 100, 'project')) || 'Unsorted';
 	if ('notes' in body) entry.notes = text(body.notes, 5000, 'notes');
 	if ('starred' in body) entry.starred = body.starred === true;
 }
