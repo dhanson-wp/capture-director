@@ -19,6 +19,9 @@ func makeEntry(_ id: String = "0123456789abcdef", title: String = "T", project: 
 }
 
 @Test func folderPathsNormalizeLikeNode() {
+    #expect(FolderPath.normalize(" a / /b ") == "a/b")
+    #expect(FolderPath.normalize("a/") == "a")
+    #expect(FolderPath.normalize("🎬 Demos") == "🎬 Demos")
     #expect(FolderPath.normalize("  a / b  ") == "a/b")
     #expect(FolderPath.normalize("a//b/") == "a/b")
     #expect(FolderPath.normalize("/") == "")
@@ -45,4 +48,10 @@ func makeEntry(_ id: String = "0123456789abcdef", title: String = "T", project: 
     let parents = FolderTree.build(Library(folders: ["a/b"]))
     #expect(parents.map(\.path) == ["a"])
     #expect(parents[0].children.map(\.path) == ["a/b"])
+}
+
+@Test func sizeFormatIsStable() {
+    #expect(Format.size(4_200_000) == "4.2 MB")
+    #expect(Format.size(999) == "999 B")
+    #expect(Format.size(1_500) == "1.5 KB")
 }

@@ -11,11 +11,7 @@ public enum AgentBlock {
         var facts: [String] = []
         if let d = e.duration, d >= 0 { facts.append(length(d)) }
         if let w = e.width, let h = e.height { facts.append("\(w)x\(h)") }
-        if let s = e.size {
-            let f = ByteCountFormatter()
-            f.countStyle = .file
-            facts.append(f.string(fromByteCount: Int64(s)))
-        }
+        if let s = e.size { facts.append(Format.size(s)) }
         if !facts.isEmpty { lines.append("Length: " + facts.joined(separator: " · ")) }
         if let u = e.url, !u.isEmpty { lines.append("Source site: \(u)") }
         if let s = e.source, !s.isEmpty {
