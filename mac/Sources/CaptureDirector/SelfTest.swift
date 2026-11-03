@@ -20,10 +20,74 @@ enum SelfTest {
         Task {
             try? await Task.sleep(for: .seconds(0.5))
             check("titles are cleaned", ItemTitle.clean("  Buy   milk ") == "Buy milk")
+            await browsing(model)
 
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
         }
+    }
+
+    /// The fixture from tools/fixture.sh: six captures in blog/Post formats, Spacefast, and Unsorted.
+    private static func browsing(_ model: AppModel) async {
+        let store = model.store
+        let library = store.library
+        let now = Date()
+        check("the fixture library loads", library.entries.count == 6, "\(library.entries.count) entries")
+
+        let expected: [(SidebarItem, Int)] = [(.all, 6), (.recent, 5), (.starred, 1), (.finals, 2), (.clips, 4), (.unsorted, 1)]
+        for (item, n) in expected {
+            let shown = Sidebar.count(item, in: library, now: now)
+            let browse = Browse.count(library.entries, item: item, now: now)
+            check("sidebar count for \(item.title) matches Browse.count", shown == browse && shown == n,
+                  "sidebar \(shown), Browse \(browse), fixture \(n)")
+        }
+
+        let tree = FolderTree.build(library)
+        let blog = tree.first { $0.path == "blog" }
+        check("the folder tree has blog → Post formats",
+              blog?.children.map(\.name) == ["Post formats"] && blog?.children.first?.path == "blog/Post formats",
+              tree.map(\.path).description)
+        func walk(_ nodes: [FolderNode]) -> [FolderNode] { nodes + nodes.flatMap { walk($0.children) } }
+        let mismatched = walk(tree).filter { $0.count != Browse.count(library.entries, item: .folder($0.path), now: now) }
+        check("every folder's count matches Browse.count", mismatched.isEmpty, mismatched.map(\.path).description)
+
+        // Click, Command-click, and Shift-click in the grid.
+        let b = Browser()
+        let order = ["a", "b", "c", "d"]
+        b.click("b", in: order, modifiers: [])
+        check("a click selects one capture", b.selection == ["b"])
+        b.click("d", in: order, modifiers: .command)
+        check("Command-click adds a capture", b.selection == ["b", "d"])
+        b.click("d", in: order, modifiers: .command)
+        check("Command-click again removes it", b.selection == ["b"])
+        b.click("b", in: order, modifiers: [])
+        b.click("d", in: order, modifiers: .shift)
+        check("Shift-click selects the range", b.selection == ["b", "c", "d"])
+
+        // The menu bar has every browsing shortcut, once.
+        func items(_ menu: NSMenu?) -> [NSMenuItem] {
+            (menu?.items ?? []).flatMap { [$0] + items($0.submenu) }
+        }
+        let all = items(NSApp.mainMenu)
+        func shortcut(_ key: String, _ mods: NSEvent.ModifierFlags) -> [NSMenuItem] {
+            all.filter { $0.keyEquivalent == key && $0.keyEquivalentModifierMask.intersection([.command, .shift, .option, .control]) == mods }
+        }
+        for (name, key, mods) in [("⌘F", "f", NSEvent.ModifierFlags.command), ("⌘1", "1", .command), ("⌘2", "2", .command),
+                                  ("⌘⌫", "\u{8}", .command), ("⇧⌘N", "n", [.command, .shift])] {
+            let found = shortcut(key, mods)
+            check("the menu bar has \(name) once", found.count == 1, found.map(\.title).description)
+        }
+
+        // A failed change is a banner; it never turns into the can't-read screen.
+        await store.setStarred(["0000000000000000"], true)
+        check("a failed change shows as a problem, not a read error",
+              store.problem != nil && store.readError == nil && store.library == library,
+              "problem \(store.problem ?? "nil"), readError \(store.readError ?? "nil")")
+        store.reload()
+        check("a reload keeps the change's problem", store.problem != nil)
+        check("the problem has no doubled prefix",
+              store.problem.map { !$0.contains("Couldn't read the library") } ?? false, store.problem ?? "")
+        store.problem = nil
     }
 
     private static func check(_ name: String, _ ok: Bool, _ detail: String = "") {

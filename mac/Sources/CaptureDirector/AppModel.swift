@@ -2,12 +2,14 @@ import CaptureDirectorKit
 import Foundation
 import Observation
 
-/// What the windows share: the library store and which Settings tab is showing.
+/// What the windows share: the library store, what the main window is
+/// browsing, and which Settings tab is showing.
 @MainActor
 @Observable
 final class AppModel {
     var settingsTab: SettingsTab = .general
     let store: LibraryStore
+    let browser = Browser()
 
     init() {
         var config: InstallConfig?

@@ -16,8 +16,8 @@ A native macOS app in SwiftUI. It drives the capture-director CLI. Command Line 
 - Build and install: `./build.sh`. Add `--open` to restart the app with the new build. The build shows warnings; fix them.
 - Unit tests: `tools/test.sh` (adds the Command Line Tools flags Swift Testing needs).
 - Self-test (the app's real functions on a scratch library): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
-- After every UI change, take snapshots with sample data and look at them: `tools/snap.sh`.
-  It writes `/tmp/CaptureDirector-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all,settings tools/snap.sh` limits the pages.
+- After every UI change, take snapshots with sample data and look at them: `tools/snap.sh` (fills a scratch home with `tools/fixture.sh`; set `CD_APP_DIR` to snapshot an app installed elsewhere).
+  It writes `/tmp/CaptureDirector-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all-grid,settings tools/snap.sh` limits the pages (all-grid, all-list, folder, starred, empty, inspector, settings).
   For a panel, sheet, or popover, add a capture to `Snapshot.swift` like the Settings loop.
 - Snapshots and the self-test run with `CD_HOME` pointing at a folder in /tmp. The app only reads `library.json`; never point tests at `~/.capture-director`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/CaptureDirector-shots/*-layout.json`. Both print PASS.
@@ -25,7 +25,7 @@ A native macOS app in SwiftUI. It drives the capture-director CLI. Command Line 
 
 ## Design rules
 
-- Use Apple's controls and system styles. Only the accent color is custom: `UI/Theme.swift` (`ThemeStore.defaultID`). People change it, and light or dark mode, in Settings > Appearance.
+- Use Apple's controls and system styles. Only the accent color is custom: mulberry, set in `UI/Theme.swift` (`ThemeStore.defaultID`), with brand tokens for the Final badge (`Palette.final`) and quiet highlights (`Palette.highlight`). There is no accent picker; light and dark mode follow the Mac.
 - Views use `.tint`, `Palette.accent`, `Palette.accentText` (accent-colored text), and `Palette.onAccent` (text on an accent fill). Never hard-code colors, radii, or durations in views.
 - Compare accents: add `APP_ACCENT=<id>` to the snapshot command.
 - Spacing comes from `Space` in `UI/Grid.swift`, on a 4 pt grid. Mark custom pages and cards with `.gridArea` and `.gridProbe`.

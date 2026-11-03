@@ -8,8 +8,15 @@ import Observation
 @Observable
 final class LibraryStore {
     var library = Library()
-    /// Shown as a banner: a failed load or a failed change.
+    /// Why library.json couldn't be read, without a prefix. With no good
+    /// library yet it fills the window; otherwise it's a banner over the
+    /// last good copy. Cleared by the next good read.
+    var readError: String?
+    /// A change the CLI refused or couldn't make. A banner people dismiss;
+    /// reloads leave it alone.
     var problem: String?
+    /// True once a read succeeded, so a later bad read keeps showing the last good library.
+    private(set) var hasLoaded = false
 
     @ObservationIgnored private let file: URL
     @ObservationIgnored private let cli: CLI?
@@ -35,9 +42,10 @@ final class LibraryStore {
     func reload() {
         do {
             library = try LibraryReader.load(from: file)
-            problem = nil
+            hasLoaded = true
+            readError = nil
         } catch {
-            problem = "Couldn't read the library: \(error.localizedDescription)"
+            readError = error.localizedDescription
         }
     }
 
@@ -88,6 +96,7 @@ final class LibraryStore {
         }
         do {
             _ = try await cli.run(args)
+            problem = nil
             reload()
         } catch let error as CLIError {
             problem = error.message

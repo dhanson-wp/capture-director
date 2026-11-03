@@ -1,15 +1,47 @@
 import AppKit
+import CaptureDirectorKit
 import IOKit.pwr_mgt
 import SwiftUI
 
 /// Screenshot mode for agents.
 ///   CD_HOME=/tmp/cd-test APP_SNAPSHOT=/tmp/shots "$HOME/Applications/Capture Director.app/Contents/MacOS/CaptureDirector"
-/// writes main-light.png and main-dark.png for the main window, and
+/// writes <page>-light.png and <page>-dark.png for every page in `pages`, and
 /// settings-<tab>-light.png and settings-<tab>-dark.png for every Settings tab, then quits.
-/// Each PNG gets a main-<mode>-layout.json with the grid probes (tools/check-layout.swift).
-/// APP_SNAPSHOT_PAGES=main limits the pages. Add "settings" to include Settings.
+/// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
+/// APP_SNAPSHOT_PAGES=all-grid,starred limits the pages. Add "settings" to include Settings.
 /// Add APP_ACCENT=<id> to see the pages in another accent.
 enum Snapshot {
+    /// One state of the main window: a name and how to get there from a fresh browser.
+    struct Page {
+        let name: String
+        let show: @MainActor (AppModel) -> Void
+    }
+
+    static let pages: [Page] = [
+        Page(name: "all-grid") { _ in },
+        Page(name: "all-list") { $0.browser.layout = .list },
+        Page(name: "folder") { $0.browser.item = .folder("blog/Post formats") },
+        Page(name: "starred") { $0.browser.item = .starred },
+        Page(name: "empty") { $0.store.library = Library() },
+        Page(name: "inspector") { model in
+            let first = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now).first
+            model.browser.selection = Set([first?.id].compactMap { $0 })
+            model.browser.showInspector = true
+        },
+    ]
+
+    /// Back to All captures in the grid with nothing selected, and the real library.
+    private static func reset(_ model: AppModel, library: Library) {
+        let b = model.browser
+        b.item = .all
+        b.layout = .grid
+        b.search = ""
+        b.sort = .newest
+        b.selection = []
+        b.showInspector = false
+        model.store.library = library
+    }
+
     static func runIfRequested(model: AppModel, openSettings: OpenSettingsAction) {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["APP_SNAPSHOT"], !dir.isEmpty else { return }
@@ -24,13 +56,17 @@ enum Snapshot {
                                         IOPMAssertionLevel(kIOPMAssertionLevelOn), "Snapshots" as CFString, &awake)
             try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             try? await Task.sleep(for: .seconds(1.5))
+            let library = model.store.library
             for mode in ["light", "dark"] {
                 NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
-                if only?.contains("main") ?? true {
+                for page in pages where only?.contains(page.name) ?? true {
+                    reset(model, library: library)
+                    page.show(model)
                     try? await Task.sleep(for: .seconds(0.8))
-                    capture(to: "\(dir)/main-\(mode).png")
+                    capture(to: "\(dir)/\(page.name)-\(mode).png")
                 }
             }
+            reset(model, library: library)
             if only == nil || only?.contains("settings") == true {
                 let main = NSApp.windows.first { $0.canBecomeMain && !$0.isSheet }
                 openSettings()
