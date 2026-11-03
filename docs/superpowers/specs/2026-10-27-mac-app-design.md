@@ -17,7 +17,8 @@ He'll mostly drive capture-director through a chat in the Claude or Codex app. T
 3. **Organize.** Project folders you can make, rename, nest, and drag captures between. Select several at once to move, star, or remove them.
 4. **Drag out real files.** Dragging a capture out of the window hands macOS the actual video file, exactly like dragging from Finder. Dropping it into an upload page in any browser (WordPress media library, YouTube, X, LinkedIn, GitHub) or into any app (Slack, Messages, Finder) just works.
 5. **Show where each file lives.** Every capture shows its real location on disk, with Show in Finder and copy-path one click away.
-6. **Hand off to an agent.** "Copy for agent" puts a ready-to-paste block on the clipboard with the path, length, size, source site, and where the click data lives.
+6. **Smaller copies for the web.** Derek added this on 2026-11-03: make a web-optimized copy of a capture to cut its file size before dragging it into an upload page with a size limit. The original is never touched.
+7. **Hand off to an agent.** "Copy for agent" puts a ready-to-paste block on the clipboard with the path, length, size, source site, and where the click data lives.
 
 ## Non-goals (this project)
 
@@ -100,6 +101,7 @@ Mockup 1 (in `.superpowers/brainstorm/`, not committed) shows the layout Derek r
 - Title (editable), kind, length, resolution, and file size
 - Star
 - **Primary actions:** Share (`ShareLink`), Copy video, Show in Finder, and a visible drag handle with the hint "Drag into any upload page." The thumbnail itself drags too, in the grid, the list, and the inspector.
+- **Web copy:** "Make web copy" (up to 1080p) and "Make small copy" (up to 720p). While it works it says so; when it's done it shows the new size next to the original's, with its own drag handle, Copy, and Share
 - **Copy for agent**
 - Project picker, notes, source site, and the "Record again" command
 - **Location:** the full path, with a copy button
@@ -128,6 +130,8 @@ With several captures selected, it shows the count and the bulk actions: move to
 - `capture-director library set <id>... [--project <path>] [--star|--unstar] [--title <text>] [--notes <text>]` edits one or several entries.
 - `capture-director library forget <id>...` removes entries from the library and never touches the files.
 - `capture-director library relocate <id> <new path>` accepts only `.mp4`, `.mov`, and `.m4v` files that `ffprobe` can read. The entry keeps its id. Because ids are hashed from the original path, `add()` must check for an id that's already taken by a different file and give the new entry a fresh random id instead. *(My call.)*
+
+- `capture-director library export <id> [--preset web|small]` makes a smaller H.264 copy in `<CD_HOME>/exports/<id>-<preset>.mp4` and prints `{ id, preset, file, size, reused }`. It reuses the copy while it's newer than the original. Exports aren't library entries; `forget` and `relocate` clear an entry's exports. *(Derek chose the hidden cache over writing next to the original, 2026-11-03.)*
 
 The browser library's server gets no new endpoints in this project.
 
