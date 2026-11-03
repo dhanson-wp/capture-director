@@ -25,7 +25,7 @@ Usage:
   capture-director library forget <id>...               Drop captures from the library; the videos stay on disk
   capture-director library export <id> [--preset web|small]  Make a smaller copy for size-limited uploads
   capture-director library relocate <id> <new path>     Point a capture at its video's new location
-  capture-director install-app [--dir ~/Applications]   Build and install the Mac app
+  capture-director install-app [--dir /Applications]    Build and install the Mac app
 
 Every command prints a JSON summary on stdout. Progress goes to stderr.
 `;

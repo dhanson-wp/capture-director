@@ -1,13 +1,13 @@
 #!/bin/zsh
 # Builds Capture Director and installs it to $CD_APP_DIR/Capture Director.app
-# (default ~/Applications).
+# (default /Applications, or ~/Applications when that isn't writable).
 # Build products live in ~/Library/Developer/CaptureDirector, outside the repo
 # (and outside Dropbox or iCloud, which would try to sync them).
 #
 # Usage: ./build.sh            release build, install
 #        ./build.sh --debug    debug build, install
 #        ./build.sh --open     install, then quit the running copy and open the new one
-# Environment: CD_APP_DIR       install folder (default ~/Applications)
+# Environment: CD_APP_DIR       install folder (default /Applications, or ~/Applications)
 #              CD_CONFIG_JSON   JSON written to Contents/Resources/config.json:
 #                               { "node", "cli", "path", "cdHome" }. Unset, the installed
 #                               copy's config.json is kept. Prefer
@@ -39,7 +39,13 @@ if [[ -n "$stale" ]]; then
   exit 1
 fi
 
-appdir="${CD_APP_DIR:-$HOME/Applications}"
+if [[ -n "${CD_APP_DIR:-}" ]]; then
+  appdir="$CD_APP_DIR"
+elif [[ -w /Applications ]]; then
+  appdir=/Applications
+else
+  appdir="$HOME/Applications"
+fi
 app="$appdir/Capture Director.app"
 mkdir -p "$appdir"
 # The app's config.json (where node and the CLI are) isn't ours to lose: without

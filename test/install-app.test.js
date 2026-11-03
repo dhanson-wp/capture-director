@@ -4,7 +4,17 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { installApp } from '../src/install-app.js';
+import { defaultAppDir, installApp } from '../src/install-app.js';
+
+test('the app installs to /Applications, or ~/Applications when that is not writable', async () => {
+	const writable = await mkdtemp(`${tmpdir()}/cd-apps-`);
+	try {
+		assert.equal(await defaultAppDir({ system: writable, home: '/Users/x' }), writable);
+		assert.equal(await defaultAppDir({ system: path.join(writable, 'missing'), home: '/Users/x' }), '/Users/x/Applications');
+	} finally {
+		await rm(writable, { recursive: true, force: true });
+	}
+});
 
 function hasSwiftToolchain() {
 	if (process.platform !== 'darwin') return false;

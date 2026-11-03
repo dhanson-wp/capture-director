@@ -177,7 +177,7 @@ capture-director library set <id>... --project clients/acme --star   # retitle, 
 capture-director library forget <id>...               # drop captures from the library; videos stay on disk
 capture-director library export <id> [--preset web|small]   # make a smaller copy for size-limited uploads
 capture-director library relocate <id> <new path>     # point a capture at its video's new location
-capture-director install-app [--dir ~/Applications]   # build and install the Mac app
+capture-director install-app [--dir /Applications]    # build and install the Mac app
 ```
 
 If a shot's frames ever come back the wrong size, the recorder stops with an error instead of stretching them. Setting `CD_CHROME_CHANNEL=bundled` switches to Playwright's cached headless shell.
@@ -209,11 +209,11 @@ Already have videos? `capture-director library add ~/Projects/demos` walks a fol
 I also built a native Mac app on top of the same library. It's the quickest way to find a clip, sort it into folders, and get the real file into whatever upload page you're staring at: drag a capture straight out of the grid and drop it on the page. If a site caps upload size, the app can make a web or small copy first, and you drag that instead.
 
 ```bash
-capture-director install-app                  # installs to ~/Applications
-capture-director install-app --dir /Applications   # if you'd rather have it there
+capture-director install-app                     # installs to /Applications
+capture-director install-app --dir ~/Applications   # or just for you
 ```
 
-You don't need Xcode; the Command Line Tools are enough to build it. It needs macOS 26 or later.
+If you can't write to /Applications (it takes an admin account), it goes in ~/Applications instead. You don't need Xcode; the Command Line Tools are enough to build it. It needs macOS 26 or later.
 
 It's local only, like everything else here. It reads and writes the same `library.json`, so the browser library and the app always agree, and it never moves or deletes your videos.
 

@@ -7,13 +7,13 @@ A native macOS app in SwiftUI. It drives the capture-director CLI. Command Line 
 - `Sources/CaptureDirector/` the app. `App.swift` has the window and menus.
 - `Sources/CaptureDirectorKit/` rules and data logic with no SwiftUI. Tests in `Tests/CaptureDirectorKitTests/`.
 - `Package.swift` a Swift package. There is no Xcode project.
-- `build.sh` builds, signs, and installs `$CD_APP_DIR/Capture Director.app` (default `~/Applications`); `capture-director install-app` runs it.
+- `build.sh` builds, signs, and installs `$CD_APP_DIR/Capture Director.app` (default `/Applications`, or `~/Applications` when that isn't writable); `capture-director install-app` runs it.
 - `Icon/AppIcon.iconset` the app icon: ten PNG sizes rendered from `ui/icon.svg`. `tools/make_icon.sh` turns it into `Resources/AppIcon.icns` with `iconutil`. To redraw the PNGs (transparent corners, artwork at 824 of 1024 points), run `swift mac/tools/render_icon.swift` from the repo root.
 - `docs/` the brief, the screen index, and the user stories, when they exist.
 
 ## Build and check
 
-- Build and install: `node bin/capture-director.js install-app` from the repo root (builds and writes the app's `config.json`, which says where node and the CLI are; without it every change fails). For scratch builds and tests, always add `--dir /tmp/CaptureDirector-test-app` so `~/Applications` is never overwritten. `build.sh` alone keeps the installed copy's config.json and warns when there's none; `--open` restarts the app with the new build. The build shows warnings; fix them.
+- Build and install: `node bin/capture-director.js install-app` from the repo root (builds and writes the app's `config.json`, which says where node and the CLI are; without it every change fails). For scratch builds and tests, always add `--dir /tmp/CaptureDirector-test-app` so the installed app is never overwritten. `build.sh` alone keeps the installed copy's config.json and warns when there's none; `--open` restarts the app with the new build. The build shows warnings; fix them.
 - Unit tests: `tools/test.sh` (adds the Command Line Tools flags Swift Testing needs).
 - Self-test (the app's real functions on a scratch library): `tools/selftest.sh` (runs the app in `/tmp/CaptureDirector-test-app`; set `CD_APP_DIR` to use another). Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots with sample data and look at them: `tools/snap.sh` (fills a scratch home with `tools/fixture.sh`; set `CD_APP_DIR` to snapshot an app installed elsewhere; it defaults to `/tmp/CaptureDirector-test-app`).
