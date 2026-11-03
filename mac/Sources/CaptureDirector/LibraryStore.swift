@@ -107,9 +107,12 @@ final class LibraryStore {
         }
     }
 
+    /// "" is Unsorted. The CLI's flag parser reads `--project ""` as a bare flag and the
+    /// empty string as an id, so Unsorted goes by name; the CLI stores it as the top level.
     func setProject(_ ids: [String], _ path: String) async {
         guard !ids.isEmpty else { return }
-        await write(["library", "set"] + ids + ["--project", path])
+        let project = FolderPath.normalize(path)
+        await write(["library", "set"] + ids + ["--project", project.isEmpty ? "Unsorted" : project])
     }
 
     func setStarred(_ ids: [String], _ on: Bool) async {
