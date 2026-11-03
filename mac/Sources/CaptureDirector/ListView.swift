@@ -64,18 +64,27 @@ struct ListView: View {
             }
             .width(min: 60, ideal: 72, max: 96)
             TableColumn("Location", value: \.location) { entry in
-                Text(entry.location)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(entry.file)
-                    .rowDrag(cell(entry))
+                HStack(spacing: Space.sm) {
+                    if model.store.missing.contains(entry.id) {
+                        Text("File moved").foregroundStyle(.orange).lineLimit(1)
+                        Button("Locate\u{2026}") { model.locate(entry) }
+                            .controlSize(.small)
+                            .help("Choose where this video is now")
+                    } else {
+                        Text(entry.location)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(entry.file)
+                    }
+                }
+                .rowDrag(cell(entry))
             }
             .width(min: 120, ideal: 240)
         } rows: {
             ForEach(rows) { entry in
                 // SwiftUI's row drag carries one file; several selected rows drag from their cells instead.
-                if cell(entry) == nil {
+                if cell(entry) == nil, !model.store.missing.contains(entry.id) {
                     TableRow(entry)
                         .draggable(entry.fileURL)
                 } else {
@@ -88,7 +97,8 @@ struct ListView: View {
             if !picked.isEmpty { CaptureMenuItems(entries: picked) }
         } primaryAction: { ids in
             // Double-click, or Return, on a row.
-            if ids.count == 1, let entry = rows.first(where: { ids.contains($0.id) }) { model.play(entry) }
+            if ids.count == 1, let entry = rows.first(where: { ids.contains($0.id) }),
+               !model.store.missing.contains(entry.id) { model.play(entry) }
         }
         .onChange(of: browser.sort) { columnSort = [] }
     }

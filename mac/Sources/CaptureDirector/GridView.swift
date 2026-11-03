@@ -21,7 +21,9 @@ struct GridView: View {
                             browser.click(entry.id, in: order, modifiers: NSEvent.modifierFlags)
                         }
                         // Alongside the click, so a single click still selects at once.
-                        .simultaneousGesture(TapGesture(count: 2).onEnded { model.play(entry) })
+                        .simultaneousGesture(TapGesture(count: 2).onEnded {
+                            if !model.store.missing.contains(entry.id) { model.play(entry) }
+                        })
                         .contextMenu { CaptureMenuItems(entries: carried) }
                         .modifier(FirstCardProbe(first: index == 0))
                 }
@@ -61,6 +63,8 @@ struct CaptureCard: View {
     @State private var scrubTask: Task<Void, Never>?
     @State private var frameWidth: CGFloat = 0
 
+    private var moved: Bool { model.store.missing.contains(entry.id) }
+
     private var frameShape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.md, style: .continuous) }
 
     var body: some View {
@@ -79,10 +83,14 @@ struct CaptureCard: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                Text(entry.byline)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if moved {
+                    MovedActions(entry: entry)
+                } else {
+                    Text(entry.byline)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             .padding(.horizontal, Space.xs)
         }
@@ -90,7 +98,7 @@ struct CaptureCard: View {
         .background(background, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         // Inside the card, so its own state survives switching between one file and several.
-        .fileDrag(carried)
+        .fileDrag(carried.filter { !model.store.missing.contains($0.id) })
         .onHover { on in withAnimation(Motion.hover) { hovering = on } }
         .help(entry.title)
         .accessibilityElement(children: .combine)
@@ -131,7 +139,13 @@ struct CaptureCard: View {
             .fill(Palette.placeholder)
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay {
-                if let image = scrubFrame ?? poster {
+                if moved {
+                    VStack(spacing: Space.xs) {
+                        Image(systemName: "questionmark.folder").font(.title2)
+                        Text("File moved").font(.callout)
+                    }
+                    .foregroundStyle(.secondary)
+                } else if let image = scrubFrame ?? poster {
                     Image(decorative: image, scale: 1)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -142,7 +156,7 @@ struct CaptureCard: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { frameWidth = $0 }
-            .onContinuousHover { scrub($0) }
+            .onContinuousHover { if !moved { scrub($0) } }
             .task(id: PosterKey(id: entry.id, changed: entry.updated)) {
                 let image = await model.thumbnails.image(for: entry, at: nil)
                 if !Task.isCancelled { poster = image }
@@ -170,15 +184,44 @@ struct CaptureCard: View {
     }
 }
 
+/// Under a card whose video is gone: point it at the new file, or let it go.
+private struct MovedActions: View {
+    @Environment(AppModel.self) private var model
+    let entry: LibraryEntry
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Space.sm) { buttons }
+            VStack(alignment: .leading, spacing: Space.xs) { buttons }
+        }
+        .controlSize(.small)
+    }
+
+    @ViewBuilder private var buttons: some View {
+        Button("Locate\u{2026}") { model.locate(entry) }
+            .buttonStyle(.bordered)
+            .help("Choose where this video is now")
+        Button("Remove from library") { model.browser.confirmingRemove = [entry] }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help("Forget this capture. There's no video to delete.")
+    }
+}
+
 /// The right-click menu for a card or a row: acts on what a drag from it would carry.
 struct CaptureMenuItems: View {
     @Environment(AppModel.self) private var model
     let entries: [LibraryEntry]
 
     var body: some View {
-        Button("Copy video") { model.copyVideos(entries) }
+        let hasFile = !model.present(entries).isEmpty
+        if entries.count == 1, !hasFile, let entry = entries.first {
+            Button("Locate\u{2026}") { model.locate(entry) }
+            Divider()
+        }
+        Button("Copy video") { model.copyVideos(entries) }.disabled(!hasFile)
         Button("Copy for agent") { model.copyForAgent(entries) }
-        Button("Show in Finder") { model.showInFinder(entries) }
+        Button("Show in Finder") { model.showInFinder(entries) }.disabled(!hasFile)
         Divider()
         Button(Bulk.starTarget(entries) ? "Star" : "Unstar") { model.toggleStar(entries) }
         Divider()

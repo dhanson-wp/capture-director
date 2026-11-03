@@ -30,6 +30,7 @@ enum SelfTest {
             check("titles are cleaned", ItemTitle.clean("  Buy   milk ") == "Buy milk")
             await browsing(model)
             await thumbnails(model)
+            await moved(model)
             await inspector(model)
 
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
@@ -247,6 +248,75 @@ enum SelfTest {
               store.library.entries.count == before - 1 && current(gone.id) == nil
                   && FileManager.default.fileExists(atPath: gone.file) == had,
               store.problem ?? "")
+        b.selection = []
+    }
+
+    /// A capture whose file is gone: flagged, nothing to drag, look at, or play, and Locate puts it back with the same id.
+    private static func moved(_ model: AppModel) async {
+        let store = model.store
+        let b = model.browser
+        let menu = MenuState.shared
+        guard let quote = store.library.entries.first(where: { $0.title == "Quote block" }),
+              let tour = store.library.entries.first(where: { $0.title == "Post formats tour" }),
+              let gallery = store.library.entries.first(where: { $0.title == "Gallery scroll" }) else {
+            check("the moved-file fixtures are there", false)
+            return
+        }
+        check("the deleted fixture video is flagged missing, and the others aren't",
+              store.missing == [quote.id], store.missing.sorted().description)
+
+        // Only the missing capture selected: nothing to drag, look at, or play.
+        b.missingIDs = store.missing
+        b.selection = [quote.id]
+        check("Quick Look and play are off for a selection with no file", !menu.canQuickLook && !menu.canPlay)
+        check("a missing capture has no URLs for Quick Look, Copy video, or Show in Finder",
+              model.selectedURLs().isEmpty)
+        check("drag has nothing to carry for a missing capture", model.present([quote]).isEmpty)
+        b.selection = [quote.id, tour.id]
+        check("Quick Look is on when the selection has a present file; play needs exactly one",
+              menu.canQuickLook && !menu.canPlay)
+        b.selection = []
+
+        guard store.canWrite else {
+            print("SKIP relocate: this build has no config.json, so it can't run the CLI")
+            return
+        }
+        // A fresh video, made with ffmpeg in the scratch home.
+        let fresh = store.home.appendingPathComponent("videos/moved/quote-block-new.mp4")
+        try? FileManager.default.createDirectory(at: fresh.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let ffmpeg = Process()
+        ffmpeg.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        ffmpeg.arguments = ["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=10",
+                            "-t", "2", "-pix_fmt", "yuv420p", fresh.path]
+        try? ffmpeg.run()
+        ffmpeg.waitUntilExit()
+        guard FileManager.default.fileExists(atPath: fresh.path) else {
+            check("ffmpeg made a replacement video", false)
+            return
+        }
+
+        // Refused: another capture's file. Nothing changes.
+        await store.relocate(quote.id, to: gallery.fileURL)
+        check("Locate refuses a video another capture already uses",
+              store.problem?.contains("already in the library") == true && store.missing == [quote.id],
+              store.problem ?? "no message")
+        store.problem = nil
+        // Refused: not a video the CLI accepts.
+        let note = store.home.appendingPathComponent("videos/moved/notes.txt")
+        try? "not a video".write(to: note, atomically: true, encoding: .utf8)
+        await store.relocate(quote.id, to: note)
+        check("Locate refuses a file that isn't a video", store.problem != nil && store.missing == [quote.id],
+              store.problem ?? "no message")
+        store.problem = nil
+
+        await store.relocate(quote.id, to: fresh)
+        let after = store.library.entries.first { $0.id == quote.id }
+        check("Locate points the capture at the new file, keeping its id and title",
+              after?.file == fresh.path && after?.title == "Quote block", store.problem ?? after?.file ?? "gone")
+        check("the capture isn't missing anymore", store.missing.isEmpty, store.missing.sorted().description)
+        b.missingIDs = store.missing
+        b.selection = [quote.id]
+        check("Quick Look and play come back with the file", menu.canQuickLook && menu.canPlay)
         b.selection = []
     }
 

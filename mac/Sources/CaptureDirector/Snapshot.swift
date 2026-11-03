@@ -30,6 +30,13 @@ enum Snapshot {
             model.browser.selection = Set([pick?.id].compactMap { $0 })
             model.browser.showInspector = true
         },
+        // A capture whose video is gone: the card, and the inspector's File moved section.
+        Page(name: "inspector-moved") { model in
+            let entries = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now)
+            let pick = entries.first { model.store.missing.contains($0.id) }
+            model.browser.selection = Set([pick?.id].compactMap { $0 })
+            model.browser.showInspector = true
+        },
         Page(name: "inspector-multi") { model in
             let entries = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now)
             model.browser.selection = Set(entries.prefix(3).map(\.id))
@@ -68,6 +75,7 @@ enum Snapshot {
             if let frame = defaultFrame, window.frame != frame { window.setFrame(frame, display: true) }
         }
         model.store.library = library
+        model.store.refreshMissing()
     }
 
     /// APP_SNAPSHOT is set: this run takes snapshots and quits.

@@ -50,6 +50,8 @@ final class Browser {
     /// Starred captures and folder paths, kept by ContentView for the Capture menu.
     var starredIDs: Set<LibraryEntry.ID> = [] { didSet { MenuState.shared.update(self) } }
     var folderPaths: [String] = [] { didSet { MenuState.shared.update(self) } }
+    /// Captures whose video isn't there, kept by ContentView. Space and Open need a file.
+    var missingIDs: Set<LibraryEntry.ID> = [] { didSet { MenuState.shared.update(self) } }
 
     /// Remove from library (⌘⌫). ContentView sets it to ask first.
     var removeSelected: (() -> Void)? { didSet { MenuState.shared.update(self) } }
@@ -100,9 +102,11 @@ final class MenuState: ObservableObject {
         if canRemove != remove { canRemove = remove }
         if canAddFolder != (b.newFolder != nil) { canAddFolder = b.newFolder != nil }
         // Space types a space in the search field, so Quick Look steps aside there.
-        let look = !b.selection.isEmpty && b.keysFree
+        // A selection with no video to show (every one moved) has nothing to look at or play.
+        let hasFile = !b.selection.isSubset(of: b.missingIDs)
+        let look = !b.selection.isEmpty && hasFile && b.keysFree
         if canQuickLook != look { canQuickLook = look }
-        let play = b.selection.count == 1 && b.keysFree
+        let play = b.selection.count == 1 && hasFile && b.keysFree
         if canPlay != play { canPlay = play }
         if hasSelection != !b.selection.isEmpty { hasSelection = !b.selection.isEmpty }
         let starred = !b.selection.isEmpty && b.selection.isSubset(of: b.starredIDs)
@@ -201,6 +205,7 @@ struct ContentView: View {
             browser.starredIDs = Set(store.library.entries.filter(\.starred).map(\.id))
             browser.folderPaths = FolderTree.paths(store.library)
         }
+        .onChange(of: store.missing, initial: true) { _, ids in browser.missingIDs = ids }
         .sheet(item: $browser.player) { entry in
             PlayerSheet(entry: entry)
         }
@@ -245,12 +250,7 @@ struct ContentView: View {
             ContentUnavailableView("Couldn't read the library", systemImage: "exclamationmark.triangle",
                                    description: Text(error))
         } else if store.library.entries.isEmpty {
-            ContentUnavailableView {
-                Label("No captures yet", systemImage: "film.stack")
-            } description: {
-                // Non-breaking hyphens keep the command on one line.
-                Text("Videos you record or render show up here. To bring in older ones, run \(Text("capture\u{2011}director library add <folder>").monospaced()) in Terminal.")
-            }
+            EmptyLibrary()
         } else if entries.isEmpty {
             if !browser.search.trimmingCharacters(in: .whitespaces).isEmpty {
                 ContentUnavailableView.search(text: browser.search)
@@ -370,5 +370,68 @@ private struct Banner: View {
         .padding(.vertical, Space.sm)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(.separator))
+    }
+}
+
+/// The library has nothing in it: the three commands that fill it, each with a copy button.
+private struct EmptyLibrary: View {
+    private static let commands: [(note: String, text: String)] = [
+        ("Record a shot list", "capture-director record shots.yaml"),
+        ("Render a timeline", "capture-director render timeline.yaml"),
+        ("Bring in videos you already have", "capture-director library add ~/Projects/demos"),
+    ]
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Nothing on the reel yet", systemImage: "film.stack")
+        } description: {
+            Text("Every clip from record and every video from render shows up here on its own, wherever you saved it. Run these in Terminal.")
+        } actions: {
+            VStack(alignment: .leading, spacing: Space.md) {
+                ForEach(Self.commands, id: \.text) { command in
+                    CommandRow(note: command.note, text: command.text)
+                }
+            }
+            .frame(maxWidth: 520)
+        }
+    }
+}
+
+/// A command to paste into Terminal, with a line saying what it does and a copy button.
+private struct CommandRow: View {
+    let note: String
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(note)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            HStack(spacing: Space.sm) {
+                Text(text)
+                    .font(.callout.monospaced())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(text, forType: .string)
+                    copied = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copied = false
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help("Copy the command, to paste into Terminal")
+            }
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, Space.sm)
+            .background(.background.secondary, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(.separator))
+        }
     }
 }

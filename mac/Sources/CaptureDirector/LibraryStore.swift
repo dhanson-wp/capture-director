@@ -15,6 +15,9 @@ final class LibraryStore {
     /// A change the CLI refused or couldn't make. A banner people dismiss;
     /// reloads leave it alone.
     var problem: String?
+    /// Captures whose video file isn't at its path. Recomputed on every reload and once a
+    /// second, since moving a file in Finder doesn't touch library.json.
+    private(set) var missing: Set<String> = []
     /// True once a read succeeded, so a later bad read keeps showing the last good library.
     private(set) var hasLoaded = false
 
@@ -22,6 +25,7 @@ final class LibraryStore {
     @ObservationIgnored private let cli: CLI?
     @ObservationIgnored private var watcher: LibraryWatcher?
     @ObservationIgnored private let writes = SerialRunner()
+    @ObservationIgnored private var poll: Task<Void, Never>?
 
     /// The folder library.json lives in.
     var home: URL { file.deletingLastPathComponent() }
@@ -43,12 +47,25 @@ final class LibraryStore {
         }
         w.start()
         watcher = w
+        poll = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                self?.refreshMissing()
+            }
+        }
+    }
+
+    /// Checks every capture's file again. Only a change publishes, so a quiet second redraws nothing.
+    func refreshMissing() {
+        let now = Browse.missing(library.entries) { FileManager.default.fileExists(atPath: $0) }
+        if now != missing { missing = now }
     }
 
     /// Keeps the last good library if the file can't be read.
     func reload() {
         do {
             library = try LibraryReader.load(from: file)
+            refreshMissing()
             hasLoaded = true
             readError = nil
         } catch {

@@ -52,3 +52,10 @@ private func ago(_ days: Double) -> Date { now.addingTimeInterval(-days * 86_400
     #expect(ids(.name) == ["c", "b", "a", "d"])
     #expect(ids(.longest) == ["b", "d", "a", "c"])
 }
+
+@Test func missingFilesAreFlagged() {
+    let es = [makeEntry("a", file: "/out/a.mp4"), makeEntry("b", file: "/out/b.mp4"), makeEntry("c", file: "/out/c.mp4")]
+    #expect(Browse.missing(es, exists: { $0 != "/out/b.mp4" }) == ["b"])
+    #expect(Browse.missing(es, exists: { _ in true }).isEmpty)
+    #expect(Browse.missing([], exists: { _ in false }).isEmpty)
+}

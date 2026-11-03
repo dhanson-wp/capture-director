@@ -2,6 +2,7 @@ import AppKit
 import CaptureDirectorKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 /// What the windows share: the library store, what the main window is
 /// browsing, and which Settings tab is showing.
@@ -82,6 +83,27 @@ final class AppModel {
             return
         }
         browser.player = entry
+    }
+
+    /// Asks for the capture's new video, then points the entry at it. The CLI keeps the id
+    /// and refuses a file another capture already uses; its message shows in the banner.
+    func locate(_ entry: LibraryEntry) {
+        let panel = NSOpenPanel()
+        panel.title = "Locate \u{201C}\(entry.title)\u{201D}"
+        panel.message = "Choose the video this capture should point to."
+        panel.prompt = "Locate"
+        panel.allowedContentTypes = [.mpeg4Movie, .quickTimeMovie, .appleProtectedMPEG4Video]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.directoryURL = URL(fileURLWithPath: entry.file).deletingLastPathComponent()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let store = store, id = entry.id
+        Task { await store.relocate(id, to: url) }
+    }
+
+    /// The captures whose video is there, by the store's last check (which the views watch).
+    func present(_ entries: [LibraryEntry]) -> [LibraryEntry] {
+        entries.filter { !store.missing.contains($0.id) }
     }
 
     func toggleQuickLook() {

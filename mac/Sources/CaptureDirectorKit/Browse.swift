@@ -20,6 +20,11 @@ public enum Browse {
         entries.filter { matches($0, item, now) }.count
     }
 
+    /// The ids of captures whose video file is gone. `exists` takes the entry's file path.
+    public static func missing(_ entries: [LibraryEntry], exists: (String) -> Bool) -> Set<String> {
+        Set(entries.filter { !exists($0.file) }.map(\.id))
+    }
+
     private static func matches(_ e: LibraryEntry, _ item: SidebarItem, _ now: Date) -> Bool {
         switch item {
         case .all: return true

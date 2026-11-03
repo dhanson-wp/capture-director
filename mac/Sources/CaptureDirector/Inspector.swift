@@ -58,10 +58,10 @@ private struct SingleInspector: View {
     }
 
     var body: some View {
-        let exists = entry.fileExists
+        let exists = !model.store.missing.contains(entry.id)
         Form {
             Section {
-                InspectorPlayer(entry: entry)
+                InspectorPlayer(entry: entry, present: exists)
                     .listRowInsets(EdgeInsets())
             }
 
@@ -83,6 +83,24 @@ private struct SingleInspector: View {
                 if let d = entry.duration { LabeledContent("Length", value: Format.length(d)) }
                 if let w = entry.width, let h = entry.height { LabeledContent("Resolution", value: "\(w) × \(h)") }
                 if let s = entry.size { LabeledContent("Size", value: Format.size(s)) }
+            }
+
+            if !exists {
+                Section {
+                    Text("The video isn't at its path anymore. Point the capture at its new file, or remove it from the library.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Locate\u{2026}", systemImage: "magnifyingglass") { model.locate(entry) }
+                        .foregroundStyle(Color.primary)
+                        .help("Choose where this video is now")
+                    Button("Remove from library\u{2026}", systemImage: "minus.circle", role: .destructive) {
+                        model.browser.confirmingRemove = [entry]
+                    }
+                    .foregroundStyle(.red)
+                    .help("Forget this capture. There's no video to delete.")
+                } header: {
+                    Label("File moved", systemImage: "questionmark.folder")
+                }
             }
 
             Section {
@@ -176,6 +194,8 @@ private struct SingleInspector: View {
 /// The video, paused, ready to play in place.
 private struct InspectorPlayer: View {
     let entry: LibraryEntry
+    /// The file is there. It flips when the video moves away or comes back.
+    let present: Bool
     @State private var player: AVPlayer?
 
     var body: some View {
@@ -183,7 +203,7 @@ private struct InspectorPlayer: View {
             Palette.placeholder
             if let player {
                 VideoPlayer(player: player)
-            } else if !entry.fileExists {
+            } else if !present {
                 VStack(spacing: Space.xs) {
                     Image(systemName: "questionmark.folder")
                         .font(.title2)
@@ -194,8 +214,9 @@ private struct InspectorPlayer: View {
             }
         }
         .aspectRatio(aspect, contentMode: .fit)
-        .task(id: entry.file) {
-            player = entry.fileExists ? AVPlayer(url: entry.fileURL) : nil
+        .task(id: "\(entry.file) \(present)") {
+            player?.pause()
+            player = present ? AVPlayer(url: entry.fileURL) : nil
         }
         .onDisappear { player?.pause() }
     }
@@ -228,7 +249,7 @@ private struct BulkInspector: View {
 
             Section {
                 DragHandle(entries: entries)
-                ShareActions(entries: entries, enabled: entries.contains(where: \.fileExists))
+                ShareActions(entries: entries, enabled: !model.present(entries).isEmpty)
             }
 
             Section {
@@ -281,10 +302,11 @@ private struct StarButton: View {
 
 /// The big target: drag it into a browser upload box, Slack, or Finder to drop the real files.
 struct DragHandle: View {
+    @Environment(AppModel.self) private var model
     let entries: [LibraryEntry]
 
     var body: some View {
-        let files = entries.filter(\.fileExists)
+        let files = model.present(entries)
         HStack(spacing: Space.md) {
             Image(systemName: entries.count > 1 ? "film.stack" : "film")
                 .font(.title2)
@@ -333,7 +355,7 @@ private struct ShareActions: View {
     let enabled: Bool
 
     var body: some View {
-        let urls = entries.filter(\.fileExists).map(\.fileURL)
+        let urls = model.present(entries).map(\.fileURL)
         Grid(horizontalSpacing: Space.sm, verticalSpacing: Space.sm) {
             GridRow {
                 ShareLink(items: urls) {
