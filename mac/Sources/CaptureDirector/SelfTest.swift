@@ -133,6 +133,15 @@ enum SelfTest {
         b.selection = [tour.id, gone.id]
         check("Quick Look skips a deleted video", model.selectedURLs() == [tour.fileURL],
               model.selectedURLs().map(\.lastPathComponent).description)
+        b.selection = [tour.id]
+        let menu = MenuState.shared
+        check("Quick Look and play are on with a selection and no sheet", menu.canQuickLook && menu.canPlay)
+        b.player = tour
+        check("Quick Look and play are off while the player is open", !menu.canQuickLook && !menu.canPlay)
+        b.player = nil
+        b.editingText = true
+        check("Quick Look and play are off while a text field is being edited", !menu.canQuickLook && !menu.canPlay)
+        b.editingText = false
         b.selection = []
     }
 

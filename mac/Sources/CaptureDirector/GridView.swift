@@ -142,7 +142,8 @@ struct CaptureCard: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { frameWidth = $0 }
             .onContinuousHover { scrub($0) }
             .task(id: PosterKey(id: entry.id, changed: entry.updated)) {
-                poster = await model.thumbnails.image(for: entry, at: nil)
+                let image = await model.thumbnails.image(for: entry, at: nil)
+                if !Task.isCancelled { poster = image }
             }
             .overlay(alignment: .topLeading) {
                 KindBadge(isFinal: entry.isFinal).padding(Space.sm)

@@ -97,6 +97,11 @@ private struct RowPoster: View {
     let entry: LibraryEntry
     @State private var poster: CGImage?
 
+    private struct PosterKey: Hashable {
+        let id: String
+        let changed: Date?
+    }
+
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.xs, style: .continuous) }
 
     var body: some View {
@@ -112,6 +117,9 @@ private struct RowPoster: View {
             .clipShape(shape)
             .frame(width: 48, height: 28)
             .accessibilityHidden(true)
-            .task(id: entry.id) { poster = await model.thumbnails.image(for: entry, at: nil) }
+            .task(id: PosterKey(id: entry.id, changed: entry.updated)) {
+                let image = await model.thumbnails.image(for: entry, at: nil)
+                if !Task.isCancelled { poster = image }
+            }
     }
 }

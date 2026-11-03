@@ -22,7 +22,12 @@ final class Browser {
         }
     }
     /// The capture playing in the player sheet.
-    var player: LibraryEntry?
+    var player: LibraryEntry? { didSet { MenuState.shared.update(self) } }
+    /// A text field other than search is being edited (the inspector sets this in Task 9).
+    var editingText = false { didSet { MenuState.shared.update(self) } }
+    /// Bare-key shortcuts (Space, Quick Look) are free: no text field is
+    /// focused and no sheet is open. Anything that takes keys sets one of these.
+    var keysFree: Bool { !searchFocused && !editingText && player == nil }
     var item: SidebarItem = .all
     var search = ""
     var sort: CaptureDirectorKit.SortOrder = .newest { didSet { MenuState.shared.update(self) } }
@@ -72,13 +77,13 @@ final class MenuState: ObservableObject {
         if layout != b.layout { layout = b.layout }
         if sort != b.sort { sort = b.sort }
         // ⌘⌫ deletes text in the search field, so the menu item steps aside there.
-        let remove = !b.selection.isEmpty && !b.searchFocused && b.removeSelected != nil
+        let remove = !b.selection.isEmpty && b.keysFree && b.removeSelected != nil
         if canRemove != remove { canRemove = remove }
         if canAddFolder != (b.newFolder != nil) { canAddFolder = b.newFolder != nil }
         // Space types a space in the search field, so Quick Look steps aside there.
-        let look = !b.selection.isEmpty && !b.searchFocused
+        let look = !b.selection.isEmpty && b.keysFree
         if canQuickLook != look { canQuickLook = look }
-        let play = b.selection.count == 1
+        let play = b.selection.count == 1 && b.keysFree
         if canPlay != play { canPlay = play }
     }
 }

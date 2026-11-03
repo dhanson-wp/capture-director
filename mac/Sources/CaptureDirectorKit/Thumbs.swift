@@ -24,6 +24,17 @@ public enum Thumbs {
         return min(rounded, last)
     }
 
+    /// What identifies one video as it is now: a re-rendered or relocated file
+    /// changes it, so nothing cached for the old one is reused.
+    public static func sourceKey(id: String, file: String, updated: Date?, size: Int?) -> String {
+        "\(id)|\(file)|\(updated?.timeIntervalSince1970 ?? 0)|\(size ?? 0)"
+    }
+
+    /// The memory-cache key for one frame; `seconds == nil` is the poster.
+    public static func frameKey(id: String, file: String, updated: Date?, size: Int?, seconds: Double?) -> String {
+        sourceKey(id: id, file: file, updated: updated, size: size) + "|" + (seconds.map { String($0) } ?? "poster")
+    }
+
     /// `<home>/thumbs/<id>.jpg`, the CLI's poster cache.
     public static func cacheFile(home: URL, id: String) -> URL {
         home.appendingPathComponent("thumbs").appendingPathComponent("\(id).jpg")

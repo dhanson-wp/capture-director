@@ -38,10 +38,7 @@ actor ThumbnailCache {
         }
 
         let time = seconds ?? Thumbs.posterTime(duration: entry.duration)
-        // Posters can land anywhere near the mark; a scrub wants the nearest
-        // frame fast, not the exact one.
-        let tolerance = seconds == nil ? 0.5 : 0.125
-        guard let image = try? await source(for: entry).frame(at: time, tolerance: tolerance) else {
+        guard let image = try? await source(for: entry).frame(at: time, scrub: seconds != nil) else {
             return nil
         }
         memory[key] = image
@@ -49,17 +46,15 @@ actor ThumbnailCache {
     }
 
     private func source(for entry: LibraryEntry) -> FrameSource {
-        let key = "\(entry.id)|\(entry.file)"
+        let key = Thumbs.sourceKey(id: entry.id, file: entry.file, updated: entry.updated, size: entry.size)
         if let s = generators[key] { return s }
         let s = FrameSource(entry.fileURL)
         generators[key] = s
         return s
     }
 
-    /// Tied to the entry's last change, so a re-rendered video doesn't show an old frame.
-    private static func key(_ entry: LibraryEntry, _ seconds: Double?) -> String {
-        let changed = entry.updated?.timeIntervalSince1970 ?? 0
-        return "\(entry.id)|\(changed)|\(entry.size ?? 0)|\(seconds.map { String($0) } ?? "poster")"
+    private static func key(_ e: LibraryEntry, _ seconds: Double?) -> String {
+        Thumbs.frameKey(id: e.id, file: e.file, updated: e.updated, size: e.size, seconds: seconds)
     }
 
     private static func modified(_ url: URL) -> Date? {
@@ -72,21 +67,31 @@ actor ThumbnailCache {
     }
 }
 
-/// One video's frame generator. AVAssetImageGenerator serializes its own work,
-/// and the cache only ever hands one source to one call at a time per frame.
+/// One video's frame generators. Each is configured once here and never
+/// changed, so concurrent calls can't disturb each other: posters use the
+/// default tolerance, scrubbing a looser one so the nearest frame comes back fast.
 private nonisolated final class FrameSource: @unchecked Sendable {
-    private let generator: AVAssetImageGenerator
+    private let poster: AVAssetImageGenerator
+    private let scrub: AVAssetImageGenerator
 
     init(_ url: URL) {
-        generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 640, height: 640)
+        let asset = AVURLAsset(url: url)
+        func make(_ tolerance: CMTime?) -> AVAssetImageGenerator {
+            let g = AVAssetImageGenerator(asset: asset)
+            g.appliesPreferredTrackTransform = true
+            g.maximumSize = CGSize(width: 640, height: 640)
+            if let tolerance {
+                g.requestedTimeToleranceBefore = tolerance
+                g.requestedTimeToleranceAfter = tolerance
+            }
+            return g
+        }
+        poster = make(nil)
+        scrub = make(CMTime(seconds: 0.125, preferredTimescale: 600))
     }
 
-    func frame(at seconds: Double, tolerance: Double) async throws -> CGImage {
-        let slack = CMTime(seconds: tolerance, preferredTimescale: 600)
-        generator.requestedTimeToleranceBefore = slack
-        generator.requestedTimeToleranceAfter = slack
-        return try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
+    func frame(at seconds: Double, scrub isScrub: Bool) async throws -> CGImage {
+        let g = isScrub ? scrub : poster
+        return try await g.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
     }
 }

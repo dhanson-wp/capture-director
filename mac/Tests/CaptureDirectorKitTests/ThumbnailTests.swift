@@ -64,3 +64,14 @@ import Testing
     #expect(lru.count == 300)
     #expect(lru[99] == nil && lru[100] == 100 && lru[399] == 399)
 }
+
+@Test func cacheKeysChangeWhenTheVideoDoes() {
+    let d = Date(timeIntervalSince1970: 500)
+    let base = Thumbs.frameKey(id: "a", file: "/v/a.mp4", updated: d, size: 10, seconds: nil)
+    #expect(base == Thumbs.frameKey(id: "a", file: "/v/a.mp4", updated: d, size: 10, seconds: nil))
+    #expect(base != Thumbs.frameKey(id: "a", file: "/w/a.mp4", updated: d, size: 10, seconds: nil))   // relocated
+    #expect(base != Thumbs.frameKey(id: "a", file: "/v/a.mp4", updated: d.addingTimeInterval(1), size: 10, seconds: nil))
+    #expect(base != Thumbs.frameKey(id: "a", file: "/v/a.mp4", updated: d, size: 11, seconds: nil))   // re-rendered
+    #expect(base != Thumbs.frameKey(id: "a", file: "/v/a.mp4", updated: d, size: 10, seconds: 1.5))
+    #expect(Thumbs.sourceKey(id: "a", file: "/v/a.mp4", updated: d, size: 10) != Thumbs.sourceKey(id: "a", file: "/v/a.mp4", updated: d, size: 11))
+}
