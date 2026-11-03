@@ -21,7 +21,9 @@ public final class LibraryWatcher: @unchecked Sendable {
     public func start() {
         queue.sync {
             guard source == nil else { return }
-            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            // Private, like the CLI makes it: the library lists every capture's path and notes.
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
+                                                     attributes: [.posixPermissions: 0o700])
             let fd = open(folder.path, O_EVTONLY)
             guard fd >= 0 else { return }
             let s = DispatchSource.makeFileSystemObjectSource(

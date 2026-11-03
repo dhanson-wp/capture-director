@@ -44,3 +44,30 @@ test('the library server only answers its own browser session', async () => {
 		server.close();
 	}
 });
+
+test('forgetting from the browser drops its smaller copies too, like the CLI', async () => {
+	const { mkdir, writeFile, readdir } = await import('node:fs/promises');
+	const path = (await import('node:path')).default;
+	const { makeVideo } = await import('./helpers.js');
+	const { add } = await import('../src/library.js');
+	const entry = await add(await makeVideo(process.env.CD_HOME, 'forget-me.mp4'));
+	const exports = path.join(process.env.CD_HOME, 'exports');
+	await mkdir(exports, { recursive: true });
+	await writeFile(path.join(exports, `${entry.id}-web.mp4`), 'x');
+	await writeFile(path.join(exports, 'someone-else-web.mp4'), 'x');
+
+	const { url, port, server } = await serve({ port: 0, open: false });
+	const base = `http://127.0.0.1:${port}`;
+	try {
+		const cookie = (await fetch(url, { redirect: 'manual' })).headers.get('set-cookie').split(';')[0];
+		const res = await fetch(`${base}/api/entries/${entry.id}/forget`, {
+			method: 'POST',
+			headers: { cookie, origin: base, 'content-type': 'application/json' },
+			body: '{}',
+		});
+		assert.equal(res.status, 200);
+		assert.deepEqual(await readdir(exports), ['someone-else-web.mp4']);
+	} finally {
+		server.close();
+	}
+});

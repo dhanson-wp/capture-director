@@ -25,3 +25,12 @@ private final class Flag: @unchecked Sendable {
     for _ in 0..<20 where flag.count == 0 { try await Task.sleep(for: .milliseconds(50)) }
     #expect(flag.count >= 1)
 }
+
+@Test func theWatcherMakesAPrivateHome() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let watcher = LibraryWatcher(file: dir.appendingPathComponent("library.json")) {}
+    watcher.start()
+    defer { watcher.stop() }
+    let mode = try FileManager.default.attributesOfItem(atPath: dir.path)[.posixPermissions] as? Int
+    #expect(mode == 0o700)
+}

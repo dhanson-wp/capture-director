@@ -464,6 +464,7 @@ export async function serve({ port = 7465, open = true } = {}) {
 				db.entries = db.entries.filter((e) => e.id !== entry.id);
 				await save(db);
 				await rm(path.join(thumbDir(), `${entry.id}.jpg`), { force: true });
+				await clearExports(entry.id);
 				return send(res, 200, { ok: true });
 			}
 			return send(res, 405, { error: 'Not allowed' });

@@ -7,6 +7,11 @@
 set -euo pipefail
 home=${1:?usage: tools/fixture.sh <home>}
 [[ "$home" == "$HOME/.capture-director"* ]] && { echo "fixture: refusing to touch ~/.capture-director" >&2; exit 1; }
+# It starts with rm -rf, so only a scratch folder under a temp directory will do.
+home=${home:a}
+tmp=${${TMPDIR:-/tmp}:a}
+[[ "$home" == /tmp/?* || "$home" == /private/tmp/?* || "$home" == "$tmp"/?* ]] ||
+  { echo "fixture: $home isn't under /tmp, /private/tmp, or \$TMPDIR; refusing to replace it" >&2; exit 1; }
 repo=${0:A:h:h:h}
 cli=(node "$repo/bin/capture-director.js")
 videos="$home/videos"
