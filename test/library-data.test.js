@@ -1,12 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { makeVideo } from './helpers.js';
 
 process.env.CD_QUIET = '1';
-const { add, idFor, load, normalizeFolder } = await import('../src/library.js');
+const { add, addFolder, forget, idFor, load, normalizeFolder, relocate, removeFolder, renameFolder, setEntries } = await import('../src/library.js');
+const run = promisify(execFile);
+const CLI = path.join(import.meta.dirname, '..', 'bin', 'capture-director.js');
 
 // Each test gets its own library folder; the module reads CD_HOME on every call.
 async function fresh() {
@@ -74,4 +78,126 @@ test('id collision gets a fresh id', async () => {
 	const entry = await add(video);
 	assert.match(entry.id, /^[0-9a-f]{16}$/);
 	assert.notEqual(entry.id, clash);
+});
+
+// Write a library.json by hand, as an older version or a person editing it would.
+async function seed(db) {
+	await mkdir(process.env.CD_HOME, { recursive: true });
+	await writeFile(dbPath(), JSON.stringify(db, null, 2));
+}
+const e = (id, project, file = `/x/${id}.mp4`) => ({ id, file, title: id, project, kind: 'video', starred: false, notes: '', added: '2026-01-01T00:00:00.000Z' });
+
+test('folderPaths skips a path that is too long instead of breaking every save', async () => {
+	const dir = await fresh();
+	const video = await makeVideo(dir);
+	await seed({ entries: [e('0000000000000001', 'x'.repeat(301))], folders: ['y'.repeat(301), 'ok'] });
+	await add(video, { project: 'fine' });
+	const saved = JSON.parse(await readFile(dbPath(), 'utf8'));
+	assert.deepEqual(saved.folders, ['fine', 'ok']);
+});
+
+test('add falls back to the old project when the renamed one is too long', async () => {
+	const dir = await fresh();
+	const video = await makeVideo(dir);
+	await seed({ entries: [], renames: { a: 'x'.repeat(299) } });
+	const entry = await add(video, { project: 'a/bb' });
+	assert.equal(entry.project, 'a/bb');
+});
+
+test('renameFolder moves entries and remembers the rename', async () => {
+	const dir = await fresh();
+	const video = await makeVideo(dir);
+	await seed({ entries: [e('0000000000000001', 'blog'), e('0000000000000002', 'blog/x')], folders: ['blog/empty'], renames: { old: 'blog/sub' } });
+	const out = await renameFolder('blog', 'Website');
+	assert.equal(out.moved, 2);
+	assert.deepEqual(out.folders, ['Website', 'Website/empty', 'Website/x']);
+	const db = await load();
+	assert.deepEqual(db.entries.map((x) => x.project), ['Website', 'Website/x']);
+	assert.equal(db.renames.blog, 'Website');
+	assert.equal(db.renames.old, 'Website/sub');
+	const entry = await add(video, { project: 'blog' });
+	assert.equal(entry.project, 'Website');
+});
+
+test('renameFolder refuses its own descendant and an existing path', async () => {
+	await fresh();
+	await seed({ entries: [e('0000000000000001', 'a'), e('0000000000000002', 'c')] });
+	await load();
+	await removeFolder('nothing').catch(() => {});
+	const before = await readFile(dbPath(), 'utf8');
+	await assert.rejects(renameFolder('a', 'a/b'), /Can't move a folder into itself/);
+	await assert.rejects(renameFolder('a', 'a'), /Can't move a folder into itself/);
+	await assert.rejects(renameFolder('a', 'c'), /There's already a folder called c/);
+	assert.equal(await readFile(dbPath(), 'utf8'), before);
+});
+
+test('renameFolder refuses a rename that makes a path too long', async () => {
+	await fresh();
+	await seed({ entries: [e('0000000000000001', 'a/bbbbb')] });
+	const before = await readFile(dbPath(), 'utf8');
+	await assert.rejects(renameFolder('a', 'x'.repeat(298)), /That name makes a folder path longer than 300 characters/);
+	assert.equal(await readFile(dbPath(), 'utf8'), before);
+});
+
+test('addFolder makes a folder and refuses an empty name', async () => {
+	await fresh();
+	assert.deepEqual((await addFolder(' a / b ')).folders, ['a', 'a/b']);
+	await assert.rejects(addFolder('  '), /Pick a folder name/);
+	await assert.rejects(addFolder('Unsorted'), /Pick a folder name/);
+});
+
+test('removeFolder only removes empty folders', async () => {
+	await fresh();
+	await seed({ entries: [e('0000000000000001', 'full/inside')], folders: ['empty', 'empty/child', 'full'] });
+	await assert.rejects(removeFolder('full'), /full isn't empty/);
+	await assert.rejects(removeFolder('full/inside'), /full\/inside isn't empty/);
+	assert.deepEqual((await removeFolder('empty')).folders, ['full', 'full/inside']);
+});
+
+test('setEntries edits several at once', async () => {
+	await fresh();
+	await seed({ entries: [e('0000000000000001', 'a'), e('0000000000000002', 'a')] });
+	const out = await setEntries(['0000000000000001', '0000000000000002'], { project: 'x', starred: true });
+	assert.deepEqual(out.map((x) => [x.project, x.starred]), [['x', true], ['x', true]]);
+	const before = await readFile(dbPath(), 'utf8');
+	await assert.rejects(setEntries(['0000000000000001', 'nope'], { starred: false }), /No capture with id nope/);
+	assert.equal(await readFile(dbPath(), 'utf8'), before);
+});
+
+test('forget keeps the file', async () => {
+	const dir = await fresh();
+	const video = await makeVideo(dir);
+	const entry = await add(video);
+	assert.deepEqual(await forget([entry.id]), { forgotten: [entry.id] });
+	assert.equal((await load()).entries.length, 0);
+	assert.ok((await stat(video)).isFile());
+});
+
+test('relocate rejects a missing or non-video file', async () => {
+	const dir = await fresh();
+	const video = await makeVideo(dir);
+	const moved = await makeVideo(dir, 'moved.mp4', 2);
+	const entry = await add(video);
+	const other = await add(await makeVideo(dir, 'other.mp4'));
+	await writeFile(path.join(dir, 'a.txt'), 'hi');
+	await assert.rejects(relocate(entry.id, path.join(dir, 'a.txt')), /Only .mp4, .mov, and .m4v videos/);
+	await assert.rejects(relocate(entry.id, path.join(dir, 'gone.mp4')));
+	await assert.rejects(relocate(entry.id, other.file), /That video is already in the library/);
+	const out = await relocate(entry.id, moved);
+	assert.equal(out.id, entry.id);
+	assert.equal(out.file, moved);
+	assert.equal(out.size, (await stat(moved)).size);
+	assert.ok(out.duration > entry.duration);
+});
+
+test('the CLI prints JSON and fails plainly', async () => {
+	await fresh();
+	const env = { ...process.env, CD_QUIET: '1' };
+	const ok = await run(process.execPath, [CLI, 'library', 'folder', 'add', 'Demos'], { env });
+	assert.ok(JSON.parse(ok.stdout).folders.includes('Demos'));
+	await assert.rejects(run(process.execPath, [CLI, 'library', 'set', 'nope', '--star'], { env }), (err) => {
+		assert.equal(err.code, 1);
+		assert.equal(err.stderr.trim(), '[capture-director] No capture with id nope');
+		return true;
+	});
 });

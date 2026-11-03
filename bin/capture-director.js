@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { record, processAll } from '../src/shots.js';
 import { render, contactSheet, stills } from '../src/render.js';
-import { serve, importPath } from '../src/library.js';
+import { serve, importPath, addFolder, renameFolder, removeFolder, setEntries, forget, relocate } from '../src/library.js';
 import { installApp } from '../src/install-app.js';
 
 const HELP = `capture-director: record polished website demo clips without a human at the wheel
@@ -16,6 +16,13 @@ Usage:
   capture-director stills <video.mp4> <t1,t2,...>       Full-size PNG stills at given seconds
   capture-director library [--port 7465] [--no-open]    Browse and organize everything you've made
   capture-director library add <folder or video>       Add videos made before the library existed
+  capture-director library folder add <path>            Make a folder (nested with /)
+  capture-director library folder rename <from> <to>    Rename or move a folder and everything in it (also: move)
+  capture-director library folder remove <path>         Remove an empty folder
+  capture-director library set <id>... [--project <path>] [--star|--unstar] [--title <text>] [--notes <text>]
+                                                        Change one or more captures
+  capture-director library forget <id>...               Drop captures from the library; the videos stay on disk
+  capture-director library relocate <id> <new path>     Point a capture at its video's new location
   capture-director install-app [--dir ~/Applications]   Build and install the Mac app
 
 Every command prints a JSON summary on stdout. Progress goes to stderr.
@@ -58,6 +65,23 @@ async function main() {
 			if (f._[0] === 'add') {
 				if (!f._[1]) throw new Error('library add needs a folder or video');
 				result = await importPath(f._[1]);
+			} else if (f._[0] === 'folder') {
+				const [, op, a, b] = f._;
+				if (op === 'add') result = await addFolder(a);
+				else if (op === 'rename' || op === 'move') result = await renameFolder(a, b);
+				else if (op === 'remove') result = await removeFolder(a);
+				else throw new Error('library folder needs add, rename, or remove');
+			} else if (f._[0] === 'set') {
+				const edits = {};
+				for (const k of ['project', 'title', 'notes']) if (f[k] !== undefined) edits[k] = f[k] === true ? '' : f[k];
+				if (f.star) edits.starred = true;
+				if (f.unstar) edits.starred = false;
+				result = await setEntries(f._.slice(1), edits);
+			} else if (f._[0] === 'forget') {
+				result = await forget(f._.slice(1));
+			} else if (f._[0] === 'relocate') {
+				if (!f._[1] || !f._[2]) throw new Error('library relocate needs an id and a new path');
+				result = await relocate(f._[1], f._[2]);
 			} else {
 				const { url, port, library } = await serve({ port: f.port === undefined ? undefined : Number(f.port), open: !f['no-open'] });
 				result = { url, port, library };
