@@ -15,7 +15,14 @@ enum Layout: String, CaseIterable, Identifiable {
 @MainActor
 @Observable
 final class Browser {
-    var selection: Set<LibraryEntry.ID> = [] { didSet { MenuState.shared.update(self) } }
+    var selection: Set<LibraryEntry.ID> = [] {
+        didSet {
+            MenuState.shared.update(self)
+            QuickLook.shared.selectionChanged()
+        }
+    }
+    /// The capture playing in the player sheet.
+    var player: LibraryEntry?
     var item: SidebarItem = .all
     var search = ""
     var sort: CaptureDirectorKit.SortOrder = .newest { didSet { MenuState.shared.update(self) } }
@@ -58,6 +65,8 @@ final class MenuState: ObservableObject {
     @Published private(set) var sort: CaptureDirectorKit.SortOrder = .newest
     @Published private(set) var canRemove = false
     @Published private(set) var canAddFolder = false
+    @Published private(set) var canQuickLook = false
+    @Published private(set) var canPlay = false
 
     func update(_ b: Browser) {
         if layout != b.layout { layout = b.layout }
@@ -66,6 +75,11 @@ final class MenuState: ObservableObject {
         let remove = !b.selection.isEmpty && !b.searchFocused && b.removeSelected != nil
         if canRemove != remove { canRemove = remove }
         if canAddFolder != (b.newFolder != nil) { canAddFolder = b.newFolder != nil }
+        // Space types a space in the search field, so Quick Look steps aside there.
+        let look = !b.selection.isEmpty && !b.searchFocused
+        if canQuickLook != look { canQuickLook = look }
+        let play = b.selection.count == 1
+        if canPlay != play { canPlay = play }
     }
 }
 
@@ -111,12 +125,14 @@ struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
     @FocusState private var searchFocus: Bool
+    /// "Now" for Recent and the sidebar counts. It changes when the library
+    /// reloads and once a minute, never on a click, so selecting doesn't redo the browse.
+    @State private var now = Date()
 
     private var store: LibraryStore { model.store }
 
     var body: some View {
         @Bindable var browser = model.browser
-        let now = Date()
         let entries = Browse.apply(store.library.entries, item: browser.item, search: browser.search,
                                    sort: browser.sort, now: now)
         NavigationSplitView {
@@ -131,7 +147,7 @@ struct ContentView: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) { skippedNote }
         }
         .inspector(isPresented: $browser.showInspector) {
-            InspectorPlaceholder(entries: store.library.entries.filter { browser.selection.contains($0.id) })
+            InspectorContent()
                 .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
                 .toolbar {
                     ToolbarSpacer(.flexible)
@@ -152,7 +168,17 @@ struct ContentView: View {
             let keep = browser.selection.intersection(ids)
             if keep != browser.selection { browser.selection = keep }
         }
+        .onChange(of: store.library) { now = Date() }
+        .sheet(item: $browser.player) { entry in
+            PlayerSheet(entry: entry)
+        }
         .noInitialFocus()
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                now = Date()
+            }
+        }
         .task {
             store.start()
             SelfTest.runIfRequested(model: model)
@@ -290,11 +316,14 @@ private struct Banner: View {
     }
 }
 
-/// Stands in for the inspector until Task 9 builds it.
-private struct InspectorPlaceholder: View {
-    let entries: [LibraryEntry]
+/// Reads the selection itself, so a click redraws the inspector and not the window.
+/// Stands in until Task 9 builds the real one.
+private struct InspectorContent: View {
+    @Environment(AppModel.self) private var model
 
     var body: some View {
+        let selection = model.browser.selection
+        let entries = model.store.library.entries.filter { selection.contains($0.id) }
         if entries.count == 1, let entry = entries.first {
             Form {
                 Section {

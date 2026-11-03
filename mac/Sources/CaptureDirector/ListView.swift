@@ -14,7 +14,8 @@ struct ListView: View {
         let rows = columnSort.isEmpty ? entries : entries.sorted(using: columnSort)
         Table(of: LibraryEntry.self, selection: $browser.selection, sortOrder: $columnSort) {
             TableColumn("Title", value: \.title) { entry in
-                HStack(spacing: Space.xs) {
+                HStack(spacing: Space.sm) {
+                    RowPoster(entry: entry)
                     Text(entry.title).lineLimit(1).help(entry.title)
                     if entry.starred {
                         Image(systemName: "star.fill")
@@ -69,6 +70,9 @@ struct ListView: View {
             if !urls.isEmpty {
                 Button("Copy video") { FileDrag.copy(urls) }
             }
+        } primaryAction: { ids in
+            // Double-click, or Return, on a row.
+            if ids.count == 1, let entry = rows.first(where: { ids.contains($0.id) }) { model.play(entry) }
         }
         .onChange(of: browser.sort) { columnSort = [] }
     }
@@ -84,5 +88,30 @@ extension LibraryEntry {
     /// The folder the video is in, with ~ for the home folder.
     var location: String {
         (((file as NSString).deletingLastPathComponent) as NSString).abbreviatingWithTildeInPath
+    }
+}
+
+/// The poster frame at the start of a row, small. Loads when the row scrolls into view.
+private struct RowPoster: View {
+    @Environment(AppModel.self) private var model
+    let entry: LibraryEntry
+    @State private var poster: CGImage?
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.xs, style: .continuous) }
+
+    var body: some View {
+        shape
+            .fill(Palette.placeholder)
+            .overlay {
+                if let poster {
+                    Image(decorative: poster, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
+            }
+            .clipShape(shape)
+            .frame(width: 48, height: 28)
+            .accessibilityHidden(true)
+            .task(id: entry.id) { poster = await model.thumbnails.image(for: entry, at: nil) }
     }
 }

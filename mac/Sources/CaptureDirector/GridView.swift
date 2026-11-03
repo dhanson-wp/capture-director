@@ -19,6 +19,8 @@ struct GridView: View {
                         .onTapGesture {
                             browser.click(entry.id, in: order, modifiers: NSEvent.modifierFlags)
                         }
+                        // Alongside the click, so a single click still selects at once.
+                        .simultaneousGesture(TapGesture(count: 2).onEnded { model.play(entry) })
                         .draggable(entry.fileURL)
                         .contextMenu {
                             Button("Copy video") { FileDrag.copy([entry.fileURL]) }
@@ -48,9 +50,16 @@ private struct FirstCardProbe: ViewModifier {
 
 /// One capture: the frame with its badge and length, then the title, date, and source site.
 struct CaptureCard: View {
+    @Environment(AppModel.self) private var model
     let entry: LibraryEntry
     let selected: Bool
     @State private var hovering = false
+    @State private var poster: CGImage?
+    /// The frame under the pointer while scrubbing; nil shows the poster.
+    @State private var scrubFrame: CGImage?
+    @State private var scrubTime: Double?
+    @State private var scrubTask: Task<Void, Never>?
+    @State private var frameWidth: CGFloat = 0
 
     private var frameShape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.md, style: .continuous) }
 
@@ -91,15 +100,49 @@ struct CaptureCard: View {
         return hovering ? Palette.highlight : .clear
     }
 
-    /// Task 8 puts the poster frame here.
+    private struct PosterKey: Hashable {
+        let id: String
+        let changed: Date?
+    }
+
+    /// Moving the pointer across the card scrubs through the clip in quarter-second steps.
+    private func scrub(_ phase: HoverPhase) {
+        switch phase {
+        case .active(let point):
+            let t = Thumbs.scrubTime(x: point.x, width: frameWidth, duration: entry.duration)
+            guard t != scrubTime else { return }
+            scrubTime = t
+            scrubTask?.cancel()
+            scrubTask = Task {
+                let image = await model.thumbnails.image(for: entry, at: t)
+                if !Task.isCancelled, scrubTime == t, let image { scrubFrame = image }
+            }
+        case .ended:
+            scrubTask?.cancel()
+            scrubTime = nil
+            scrubFrame = nil
+        }
+    }
+
     private var thumbnail: some View {
         frameShape
             .fill(Palette.placeholder)
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay {
-                Image(systemName: entry.isFinal ? "film" : "film.stack")
-                    .font(.title)
-                    .foregroundStyle(.tertiary)
+                if let image = scrubFrame ?? poster {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Image(systemName: entry.isFinal ? "film" : "film.stack")
+                        .font(.title)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { frameWidth = $0 }
+            .onContinuousHover { scrub($0) }
+            .task(id: PosterKey(id: entry.id, changed: entry.updated)) {
+                poster = await model.thumbnails.image(for: entry, at: nil)
             }
             .overlay(alignment: .topLeading) {
                 KindBadge(isFinal: entry.isFinal).padding(Space.sm)

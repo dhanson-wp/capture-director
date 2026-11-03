@@ -21,6 +21,7 @@ enum SelfTest {
             try? await Task.sleep(for: .seconds(0.5))
             check("titles are cleaned", ItemTitle.clean("  Buy   milk ") == "Buy milk")
             await browsing(model)
+            await thumbnails(model)
 
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
@@ -88,6 +89,51 @@ enum SelfTest {
         check("the problem has no doubled prefix",
               store.problem.map { !$0.contains("Couldn't read the library") } ?? false, store.problem ?? "")
         store.problem = nil
+    }
+
+    /// Posters, scrub frames, the disk cache, and the deleted-file entry, on the fixture.
+    private static func thumbnails(_ model: AppModel) async {
+        let entries = model.store.library.entries
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("cd-thumbs-\(getpid())")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let cache = ThumbnailCache(home: home)
+        guard let tour = entries.first(where: { $0.title == "Post formats tour" }),
+              let gone = entries.first(where: { $0.title == "Quote block" }),
+              let pricing = entries.first(where: { $0.title == "Pricing toggle" }) else {
+            check("the thumbnail fixtures are there", false)
+            return
+        }
+        func bytes(_ image: CGImage?) -> Data? { image?.dataProvider?.data as Data? }
+
+        let poster = await cache.image(for: tour, at: nil)
+        check("a poster frame comes from the video, at most 640 wide",
+              poster.map { $0.width > 0 && $0.width <= 640 } ?? false, "\(poster?.width ?? 0)")
+        let early = await cache.image(for: tour, at: 0)
+        let late = await cache.image(for: tour, at: 20)
+        check("scrub frames at different times differ", early != nil && late != nil && bytes(early) != bytes(late))
+        check("a repeat request comes back from memory", await cache.image(for: tour, at: 20) === late)
+        check("a deleted video has no frame, and no crash", await cache.image(for: gone, at: nil) == nil)
+
+        // The CLI's cached poster is used when it's newer than the video, and ignored when it's older.
+        let thumbs = home.appendingPathComponent("thumbs")
+        try? FileManager.default.createDirectory(at: thumbs, withIntermediateDirectories: true)
+        let cached = thumbs.appendingPathComponent("\(pricing.id).jpg")
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 320, pixelsHigh: 180, bitsPerSample: 8,
+                                   samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        try? rep?.representation(using: .jpeg, properties: [:])?.write(to: cached)
+        let fresh = await ThumbnailCache(home: home).image(for: pricing, at: nil)
+        check("a fresh cached poster is used as it is", fresh?.width == 320, "\(fresh?.width ?? 0)")
+        try? FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: cached.path)
+        let stale = await ThumbnailCache(home: home).image(for: pricing, at: nil)
+        check("a cached poster older than the video is skipped", stale.map { $0.width == 640 } ?? false, "\(stale?.width ?? 0)")
+
+        // Quick Look gets the selection in screen order, without files that are gone.
+        let b = model.browser
+        b.selection = [tour.id, gone.id]
+        check("Quick Look skips a deleted video", model.selectedURLs() == [tour.fileURL],
+              model.selectedURLs().map(\.lastPathComponent).description)
+        b.selection = []
     }
 
     private static func check(_ name: String, _ ok: Bool, _ detail: String = "") {

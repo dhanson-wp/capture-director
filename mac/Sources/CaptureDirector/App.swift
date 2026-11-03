@@ -29,7 +29,7 @@ struct CaptureDirectorApp: App {
             SidebarCommands()
             ToolbarCommands()
             InspectorCommands()
-            BrowserCommands(browser: model.browser, menu: menu)
+            BrowserCommands(model: model, menu: menu)
         }
 
         Settings {
@@ -43,14 +43,24 @@ struct CaptureDirectorApp: App {
 
 /// Menu bar items for browsing. Every toolbar control has one here too.
 struct BrowserCommands: Commands {
-    let browser: Browser
+    let model: AppModel
     @ObservedObject var menu: MenuState
+    private var browser: Browser { model.browser }
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New folder") { browser.newFolder?() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(!menu.canAddFolder)
+            Button("Play") {
+                if let id = browser.selection.first,
+                   let entry = model.store.library.entries.first(where: { $0.id == id }) { model.play(entry) }
+            }
+            .keyboardShortcut("o", modifiers: .command)
+            .disabled(!menu.canPlay)
+            Button("Quick Look") { model.toggleQuickLook() }
+                .keyboardShortcut(.space, modifiers: [])
+                .disabled(!menu.canQuickLook)
         }
         CommandGroup(after: .pasteboard) {
             Divider()
