@@ -48,9 +48,6 @@ private struct SingleInspector: View {
     /// The last values sent to the CLI, so a commit and a focus change don't save twice.
     @State private var sentTitle: String
     @State private var sentNotes: String
-    /// The finished copy shown in the Web copy section, and the preset being made right now.
-    @State private var copy: ExportResult?
-    @State private var making: String?
 
     init(entry: LibraryEntry) {
         self.entry = entry
@@ -112,7 +109,7 @@ private struct SingleInspector: View {
             }
 
             if exists {
-                WebCopySection(entry: entry, copy: $copy, making: $making)
+                WebCopySection(entry: entry)
             }
 
             Section {
@@ -202,10 +199,11 @@ private struct SingleInspector: View {
 private struct WebCopySection: View {
     @Environment(AppModel.self) private var model
     let entry: LibraryEntry
-    @Binding var copy: ExportResult?
-    @Binding var making: String?
 
     var body: some View {
+        let job = model.store.exportJob(for: entry.id)
+        let making = job?.making == true ? job?.preset : nil
+        let copy = job?.result
         Section {
             if let making {
                 HStack(spacing: Space.sm) {
@@ -270,19 +268,16 @@ private struct WebCopySection: View {
     }
 
     private func make(_ preset: String) {
-        guard making == nil else { return }
-        making = preset
         let store = model.store, id = entry.id
         Task {
-            let result = await store.exportCopy(id, preset: preset)
-            if let result { copy = result }
-            making = nil
+            _ = await store.exportCopy(id, preset: preset)
         }
     }
 
-    /// Shows the newest copy already on disk, without making one nobody asked for.
+    /// Shows the newest copy already on disk, without making one nobody asked for. A copy the
+    /// store already knows about (made or in progress) needs nothing.
     private func restore() async {
-        guard copy == nil, making == nil else { return }
+        guard model.store.exportJob(for: entry.id) == nil else { return }
         let home = model.store.home, id = entry.id
         let newest = await Task.detached { () -> String? in
             ExportCopy.presets
@@ -293,11 +288,8 @@ private struct WebCopySection: View {
                 }
                 .max { $0.1 < $1.1 }?.0
         }.value
-        guard let newest, copy == nil, making == nil else { return }
-        making = newest
-        let result = await model.store.exportCopy(id, preset: newest)
-        if let result { copy = result }
-        making = nil
+        guard let newest, model.store.exportJob(for: id) == nil else { return }
+        _ = await model.store.exportCopy(id, preset: newest)
     }
 }
 

@@ -1,6 +1,7 @@
 // Smaller copies of a capture for upload pages with size limits. Copies live in
 // <home>/exports, never next to the original, and the original is never touched.
 
+import { randomBytes } from 'node:crypto';
 import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { home, load } from './library.js';
@@ -30,7 +31,8 @@ export async function exportEntry(id, { preset = 'web' } = {}) {
 	const made = await stat(file).catch(() => null);
 	if (made && made.size > 0 && made.mtimeMs >= source.mtimeMs) return { id, preset, file, size: made.size, reused: true };
 
-	const tmp = `${file}.tmp.mp4`;
+	// A name of its own, so two runs for the same copy (app and agent) never write one file.
+	const tmp = `${file}.${process.pid}-${randomBytes(4).toString('hex')}.tmp.mp4`;
 	const { hasAudio } = await probe(entry.file);
 	const args = ['-i', entry.file, '-vf', `scale='min(${p.width},iw)':-2`, '-c:v', 'libx264', '-crf', p.crf, '-preset', 'medium', '-pix_fmt', 'yuv420p'];
 	args.push(...(hasAudio ? ['-c:a', 'aac', '-b:a', p.audio] : ['-an']));

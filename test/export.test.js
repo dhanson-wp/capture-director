@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, stat, utimes, access } from 'node:fs/promises';
+import { mkdtemp, readdir, stat, utimes, access } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
@@ -8,7 +8,7 @@ import path from 'node:path';
 import { ffmpeg, probe } from '../src/util.js';
 
 process.env.CD_QUIET = '1';
-const { add, forget } = await import('../src/library.js');
+const { add, forget, relocate } = await import('../src/library.js');
 const { exportEntry, exportFile } = await import('../src/export.js');
 const run = promisify(execFile);
 const CLI = path.join(import.meta.dirname, '..', 'bin', 'capture-director.js');
@@ -90,4 +90,24 @@ test('the CLI prints JSON', async () => {
 	assert.equal(json.preset, 'small');
 	assert.equal(json.file, exportFile(process.env.CD_HOME, entry.id, 'small'));
 	await assert.rejects(run('node', [CLI, 'library', 'export', entry.id, '--preset', 'huge'], { env: process.env }), /Pick web or small/);
+});
+
+test('two exports at once both finish with one playable file and no temp files', async () => {
+	const dir = await fresh();
+	const entry = await add(await bigVideo(dir));
+	const [a, b] = await Promise.all([exportEntry(entry.id), exportEntry(entry.id)]);
+	assert.equal(a.file, b.file);
+	const info = await probe(a.file);
+	assert.ok(info.width <= 1920 && info.duration > 2);
+	assert.deepEqual(await readdir(path.dirname(a.file)), [path.basename(a.file)]);
+});
+
+test('relocate clears exports', async () => {
+	const dir = await fresh();
+	const entry = await add(await bigVideo(dir));
+	const out = await exportEntry(entry.id);
+	const { makeVideo } = await import('./helpers.js');
+	const moved = await makeVideo(dir, 'moved.mp4');
+	await relocate(entry.id, moved);
+	await assert.rejects(access(out.file));
 });

@@ -131,10 +131,12 @@ final class LibraryStore {
     func forget(_ ids: [String]) async {
         guard !ids.isEmpty else { return }
         await write(["library", "forget"] + ids)
+        dropExports(ids)
     }
 
     func relocate(_ id: String, to url: URL) async {
         await write(["library", "relocate", id, url.path])
+        dropExports([id])
     }
 
     func addFolder(_ path: String) async {
@@ -149,27 +151,50 @@ final class LibraryStore {
         await write(["library", "folder", "remove", path])
     }
 
+    /// Copies being made or finished, by "<id>-<preset>". The store holds them, not the inspector,
+    /// so selecting another capture and coming back still shows the copy, finished or not.
+    private(set) var exports: [String: ExportJob] = [:]
+    @ObservationIgnored private var exportTasks: [String: Task<ExportResult?, Never>] = [:]
+
+    /// The copy to show for a capture: one in progress, else the newest finished.
+    func exportJob(for id: String) -> ExportJob? {
+        ExportJob.shown(ExportCopy.presets.compactMap { exports["\(id)-\($0)"] })
+    }
+
     /// Makes (or reuses) a smaller copy of a capture for upload pages with size limits.
-    /// Nil on failure, with `problem` set. It doesn't touch library.json, so it skips the
-    /// serial runner: a long encode must not hold up a star click behind it.
+    /// Nil on failure, with `problem` set. A second ask while one is running joins it. It
+    /// doesn't touch library.json, so it skips the serial runner: a long encode must not hold
+    /// up a star click behind it.
     func exportCopy(_ id: String, preset: String) async -> ExportResult? {
+        let key = "\(id)-\(preset)"
+        if let running = exportTasks[key] { return await running.value }
         guard let cli else {
             problem = CLIError.notInstalled.message
             return nil
         }
-        do {
-            let out = try await cli.run(["library", "export", id, "--preset", preset])
-            guard let result = ExportCopy.decode(out) else {
-                problem = "Capture Director couldn't read the copy's details."
-                return nil
+        exports[key] = ExportJob(preset: preset)
+        let task = Task { () -> ExportResult? in
+            var result: ExportResult?
+            do {
+                let out = try await cli.run(["library", "export", id, "--preset", preset])
+                result = ExportCopy.decode(out)
+                if result == nil { self.problem = "Capture Director couldn't read the copy's details." }
+            } catch let error as CLIError {
+                self.problem = error.message
+            } catch {
+                self.problem = error.localizedDescription
             }
+            self.exportTasks[key] = nil
+            self.exports[key] = result.map { ExportJob(preset: preset, result: $0) }
             return result
-        } catch let error as CLIError {
-            problem = error.message
-        } catch {
-            problem = error.localizedDescription
         }
-        return nil
+        exportTasks[key] = task
+        return await task.value
+    }
+
+    /// A copy goes away with its capture (forget) or its file (relocate).
+    private func dropExports(_ ids: [String]) {
+        for id in ids { for p in ExportCopy.presets { exports["\(id)-\(p)"] = nil } }
     }
 
     func export(_ id: String, preset: String) async -> URL? {

@@ -20,3 +20,18 @@ import Testing
     #expect(r == ExportResult(id: "a1", preset: "small", file: "/tmp/h/exports/a1-small.mp4", size: 1234, reused: true))
     #expect(ExportCopy.decode(Data("nope".utf8)) == nil)
 }
+
+@Test func copySummaryAdmitsWhenNotSmaller() {
+    #expect(ExportCopy.summary(preset: "web", size: 120_000, original: 99_300)
+            == "Web copy \u{00B7} 120.0 KB (no smaller than the original, 99.3 KB)")
+}
+
+@Test func shownJobPrefersInProgressThenNewest() {
+    let t = Date(timeIntervalSince1970: 100)
+    let r = ExportResult(id: "a", preset: "web", file: "/x", size: 1, reused: false)
+    let done = ExportJob(preset: "web", result: r, at: t)
+    let newer = ExportJob(preset: "small", result: r, at: t + 5)
+    #expect(ExportJob.shown([done, newer])?.preset == "small")
+    #expect(ExportJob.shown([done, ExportJob(preset: "small", at: t - 1)])?.making == true)
+    #expect(ExportJob.shown([]) == nil)
+}

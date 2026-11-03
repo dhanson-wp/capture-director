@@ -242,6 +242,15 @@ enum SelfTest {
         } else {
             check("a web copy is made", false, store.problem ?? "")
         }
+        // A copy in progress, and the same state read again after the inspector is gone and back.
+        let slow = Task { await store.exportCopy(gallery.id, preset: "small") }
+        await Task.yield()
+        check("a copy in progress shows as making", store.exportJob(for: gallery.id)?.making == true)
+        let joined = await store.exportCopy(gallery.id, preset: "small")
+        let finished = await slow.value
+        check("a second ask joins the first and gets the same file", joined != nil && joined == finished, store.problem ?? "")
+        check("the finished copy is kept for a rebuilt inspector",
+              store.exportJob(for: gallery.id)?.result?.preset == "small" && store.exportJob(for: gallery.id)?.making == false)
         check("a copy of an unknown capture fails with a problem", await store.export("nope", preset: "web") == nil && store.problem != nil)
         store.problem = nil
         // Two writes handed in at once both land, in order: the second waits for the first.

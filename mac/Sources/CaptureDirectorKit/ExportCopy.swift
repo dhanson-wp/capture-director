@@ -19,6 +19,27 @@ public struct ExportResult: Decodable, Equatable, Sendable {
     public var url: URL { URL(fileURLWithPath: file) }
 }
 
+/// A copy being made or finished, kept by the store so a view torn down and rebuilt still sees it.
+public struct ExportJob: Equatable, Sendable {
+    public let preset: String
+    /// Nil while it's being made.
+    public var result: ExportResult?
+    public let at: Date
+
+    public init(preset: String, result: ExportResult? = nil, at: Date = .now) {
+        self.preset = preset
+        self.result = result
+        self.at = at
+    }
+
+    public var making: Bool { result == nil }
+
+    /// The job to show for one capture: one in progress first, else the newest finished.
+    public static func shown(_ jobs: [ExportJob]) -> ExportJob? {
+        jobs.first(where: \.making) ?? jobs.max { $0.at < $1.at }
+    }
+}
+
 /// Web copies: smaller videos for upload pages with size limits. They live in
 /// the library home's `exports` folder, never next to the original.
 public enum ExportCopy {
@@ -33,7 +54,10 @@ public enum ExportCopy {
     /// "Web copy · 3.1 MB (was 42.0 MB)"; just the copy's size when the original's is unknown.
     public static func summary(preset: String, size: Int, original: Int?) -> String {
         var line = "\(title(preset)) \u{00B7} \(Format.size(size))"
-        if let original { line += " (was \(Format.size(original)))" }
+        if let original {
+            line += size >= original ? " (no smaller than the original, \(Format.size(original)))"
+                                     : " (was \(Format.size(original)))"
+        }
         return line
     }
 
