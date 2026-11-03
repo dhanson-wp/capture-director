@@ -30,13 +30,20 @@ Usage:
 Every command prints a JSON summary on stdout. Progress goes to stderr.
 `;
 
+// --key=value splits on the first = only, so a value can hold = or start with --.
+// A bare -- ends the flags: everything after it is positional, even names starting with --.
 function flags(argv) {
 	const out = { _: [] };
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
+		if (a === '--') {
+			out._.push(...argv.slice(i + 1));
+			break;
+		}
 		if (a.startsWith('--')) {
-			const [k, v] = a.slice(2).split('=');
-			out[k] = v ?? (argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : true);
+			const eq = a.indexOf('=');
+			if (eq !== -1) out[a.slice(2, eq)] = a.slice(eq + 1);
+			else out[a.slice(2)] = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : true;
 		} else out._.push(a);
 	}
 	return out;
@@ -87,6 +94,8 @@ async function main() {
 			} else if (f._[0] === 'export') {
 				if (!f._[1]) throw new Error('library export needs an id');
 				result = await exportEntry(f._[1], { preset: f.preset === undefined ? 'web' : f.preset });
+			} else if (f._[0] !== undefined) {
+				throw new Error(`Unknown library command ${f._[0]}. Run capture-director help.`);
 			} else {
 				const { url, port, library } = await serve({ port: f.port === undefined ? undefined : Number(f.port), open: !f['no-open'] });
 				result = { url, port, library };

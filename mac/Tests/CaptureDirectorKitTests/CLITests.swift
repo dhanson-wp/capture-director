@@ -46,3 +46,19 @@ private func fake(_ body: String) throws -> InstallConfig {
     let text = String(decoding: try await cli.run([]), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     #expect(text == "/tmp/some-home")
 }
+
+@Test func cliStopsACommandThatRunsPastItsLimit() async throws {
+    // A CLI that never exits, like an old checkout serving the browser library.
+    let cli = CLI(config: try fake("exec sleep 30"))
+    let start = Date()
+    await #expect(throws: CLIError.timedOut) {
+        try await cli.run(["library", "frobnicate"], timeout: 0.5)
+    }
+    #expect(Date().timeIntervalSince(start) < 5)
+    #expect(!CLIError.timedOut.message.contains("\u{2014}"))
+}
+
+@Test func cliLimitsWritesButGivesCopiesLonger() {
+    #expect(CLI.writeTimeout == 60)
+    #expect(CLI.exportTimeout >= 30 * 60)
+}

@@ -214,3 +214,41 @@ test('the CLI prints JSON and fails plainly', async () => {
 		return true;
 	});
 });
+
+test('the CLI keeps flag values that start with -- or hold =', async () => {
+	const dir = await fresh();
+	const entry = await add(await makeVideo(dir));
+	const env = { ...process.env, CD_QUIET: '1' };
+	const set = async (...args) => JSON.parse((await run(process.execPath, [CLI, 'library', 'set', entry.id, ...args], { env })).stdout);
+	await set('--notes=-- todo: reshoot', '--title=--star');
+	let saved = (await load()).entries[0];
+	assert.equal(saved.notes, '-- todo: reshoot');
+	assert.equal(saved.title, '--star');
+	assert.equal(saved.starred, false);
+	await set('--notes=a=b');
+	assert.equal((await load()).entries[0].notes, 'a=b');
+	await set('--notes=');
+	assert.equal((await load()).entries[0].notes, '');
+	// The older forms still work.
+	await set('--project', 'Demos', '--star');
+	saved = (await load()).entries[0];
+	assert.equal(saved.project, 'Demos');
+	assert.equal(saved.starred, true);
+});
+
+test('the CLI reads everything after -- as names, even ones starting with --', async () => {
+	await fresh();
+	const env = { ...process.env, CD_QUIET: '1' };
+	const out = JSON.parse((await run(process.execPath, [CLI, 'library', 'folder', 'add', '--', '--draft'], { env })).stdout);
+	assert.ok(out.folders.includes('--draft'));
+});
+
+test('the CLI refuses an unknown library command instead of serving', async () => {
+	await fresh();
+	const env = { ...process.env, CD_QUIET: '1' };
+	await assert.rejects(run(process.execPath, [CLI, 'library', 'frobnicate'], { env, timeout: 10000 }), (err) => {
+		assert.equal(err.code, 1);
+		assert.equal(err.stderr.trim(), '[capture-director] Unknown library command frobnicate. Run capture-director help.');
+		return true;
+	});
+});

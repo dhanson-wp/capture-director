@@ -107,12 +107,11 @@ final class LibraryStore {
         }
     }
 
-    /// "" is Unsorted. The CLI's flag parser reads `--project ""` as a bare flag and the
-    /// empty string as an id, so Unsorted goes by name; the CLI stores it as the top level.
+    /// "" is Unsorted. Values always go as one `--flag=value` argument, so text that
+    /// starts with `--` or holds `=` arrives whole, and `--project=` is the top level.
     func setProject(_ ids: [String], _ path: String) async {
         guard !ids.isEmpty else { return }
-        let project = FolderPath.normalize(path)
-        await write(["library", "set"] + ids + ["--project", project.isEmpty ? "Unsorted" : project])
+        await write(["library", "set"] + ids + ["--project=\(FolderPath.normalize(path))"])
     }
 
     func setStarred(_ ids: [String], _ on: Bool) async {
@@ -121,34 +120,32 @@ final class LibraryStore {
     }
 
     func setTitle(_ id: String, _ title: String) async {
-        await write(["library", "set", id, "--title", title])
+        await write(["library", "set", id, "--title=\(title)"])
     }
 
     func setNotes(_ id: String, _ notes: String) async {
-        await write(["library", "set", id, "--notes", notes])
+        await write(["library", "set", id, "--notes=\(notes)"])
     }
 
     func forget(_ ids: [String]) async {
         guard !ids.isEmpty else { return }
-        await write(["library", "forget"] + ids)
-        dropExports(ids)
+        if await write(["library", "forget"] + ids) { dropExports(ids) }
     }
 
     func relocate(_ id: String, to url: URL) async {
-        await write(["library", "relocate", id, url.path])
-        dropExports([id])
+        if await write(["library", "relocate", id, url.path]) { dropExports([id]) }
     }
 
     func addFolder(_ path: String) async {
-        await write(["library", "folder", "add", path])
+        await write(["library", "folder", "add", "--", path])
     }
 
     func renameFolder(_ from: String, to: String) async {
-        await write(["library", "folder", "rename", from, to])
+        await write(["library", "folder", "rename", "--", from, to])
     }
 
     func removeFolder(_ path: String) async {
-        await write(["library", "folder", "remove", path])
+        await write(["library", "folder", "remove", "--", path])
     }
 
     /// Copies being made or finished, by "<id>-<preset>". The store holds them, not the inspector,
@@ -176,7 +173,7 @@ final class LibraryStore {
         let task = Task { () -> ExportResult? in
             var result: ExportResult?
             do {
-                let out = try await cli.run(["library", "export", id, "--preset", preset])
+                let out = try await cli.run(["library", "export", id, "--preset=\(preset)"], timeout: CLI.exportTimeout)
                 result = ExportCopy.decode(out)
                 if result == nil { self.problem = "Capture Director couldn't read the copy's details." }
             } catch let error as CLIError {
@@ -192,7 +189,8 @@ final class LibraryStore {
         return await task.value
     }
 
-    /// A copy goes away with its capture (forget) or its file (relocate).
+    /// A copy goes away with its capture (forget) or its file (relocate), once the CLI
+    /// made that change; a failed write leaves the copy showing.
     private func dropExports(_ ids: [String]) {
         for id in ids { for p in ExportCopy.presets { exports["\(id)-\(p)"] = nil } }
     }
@@ -204,22 +202,26 @@ final class LibraryStore {
     /// Runs the CLI off the main actor, then reloads. A failure becomes `problem`.
     /// Writes run one at a time in the order they were asked for: the CLI
     /// rewrites library.json without a lock, so two at once could lose one.
-    private func write(_ args: [String]) async {
+    /// True when the CLI made the change.
+    @discardableResult
+    private func write(_ args: [String]) async -> Bool {
         guard let cli else {
             problem = CLIError.notInstalled.message
-            return
+            return false
         }
-        await writes.run { [weak self] in
+        return await writes.run { [weak self] in
             do {
                 _ = try await cli.run(args)
                 self?.problem = nil
                 self?.reload()
                 await self?.refreshMissing()
+                return true
             } catch let error as CLIError {
                 self?.problem = error.message
             } catch {
                 self?.problem = error.localizedDescription
             }
+            return false
         }
     }
 }

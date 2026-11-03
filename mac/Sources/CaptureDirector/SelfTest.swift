@@ -229,6 +229,20 @@ enum SelfTest {
         check("a new title saves", current(gallery.id)?.title == "Gallery scroll, take two", store.problem ?? "")
         await store.setNotes(gallery.id, "Use this one on the launch post.")
         check("notes save", current(gallery.id)?.notes == "Use this one on the launch post.", store.problem ?? "")
+        // Text that looks like a flag, or holds =, arrives whole.
+        await store.setNotes(gallery.id, "-- todo: reshoot, a=b")
+        await store.setTitle(gallery.id, "--star")
+        check("notes and a title starting with -- save as typed",
+              current(gallery.id)?.notes == "-- todo: reshoot, a=b" && current(gallery.id)?.title == "--star"
+                  && current(gallery.id)?.starred == false,
+              "title \(current(gallery.id)?.title ?? "nil"), notes \(current(gallery.id)?.notes ?? "nil") \(store.problem ?? "")")
+        await store.setNotes(gallery.id, "")
+        check("empty notes save as empty", current(gallery.id)?.notes == "", current(gallery.id)?.notes ?? "nil")
+        await store.addFolder("--draft")
+        check("a folder name starting with -- is made", FolderTree.paths(store.library).contains("--draft"), store.problem ?? "")
+        await store.removeFolder("--draft")
+        check("and removed", !FolderTree.paths(store.library).contains("--draft"), store.problem ?? "")
+        await store.setNotes(gallery.id, "Use this one on the launch post.")
         // A web copy lands in the home's exports folder, smaller, and a second ask reuses it.
         if let copy = await store.exportCopy(gallery.id, preset: "web") {
             let original = (try? FileManager.default.attributesOfItem(atPath: gallery.file))?[.size] as? Int ?? 0
@@ -252,6 +266,11 @@ enum SelfTest {
         check("the finished copy is kept for a rebuilt inspector",
               store.exportJob(for: gallery.id)?.result?.preset == "small" && store.exportJob(for: gallery.id)?.making == false)
         check("a copy of an unknown capture fails with a problem", await store.export("nope", preset: "web") == nil && store.problem != nil)
+        store.problem = nil
+        // A relocate the CLI refuses leaves the copy showing.
+        await store.relocate(gallery.id, to: URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString).mp4"))
+        check("a failed relocate keeps the capture's copy", store.problem != nil && store.exportJob(for: gallery.id)?.result != nil,
+              store.problem ?? "no problem")
         store.problem = nil
         // Two writes handed in at once both land, in order: the second waits for the first.
         let first = Task { await store.setTitle(gallery.id, "First title") }

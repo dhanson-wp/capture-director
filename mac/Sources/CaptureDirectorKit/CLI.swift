@@ -3,6 +3,8 @@ import Foundation
 public enum CLIError: Error, Equatable, Sendable {
     case notInstalled
     case failed(String)
+    /// The CLI ran past its limit and was stopped.
+    case timedOut
 
     /// What to show the person.
     public var message: String {
@@ -11,6 +13,8 @@ public enum CLIError: Error, Equatable, Sendable {
             "Capture Director can't find Node or the capture-director CLI anymore. Run capture-director install-app to fix it."
         case .failed(let text):
             text
+        case .timedOut:
+            "capture-director took too long and was stopped, so nothing changed. If it keeps happening, run capture-director install-app to point the app at an up-to-date CLI."
         }
     }
 }
@@ -26,17 +30,25 @@ public struct CLI: Sendable {
         self.home = home
     }
 
-    /// Runs `node cli args…` off the calling actor and returns stdout.
-    public func run(_ args: [String]) async throws -> Data {
+    /// How long a library change may run. A change takes well under a second; a CLI
+    /// that doesn't know the command (an old checkout serves the browser library
+    /// instead) would otherwise never exit and hold up every change after it.
+    public static let writeTimeout: TimeInterval = 60
+    /// How long making a smaller copy may run: a long video takes minutes to encode.
+    public static let exportTimeout: TimeInterval = 30 * 60
+
+    /// Runs `node cli args…` off the calling actor and returns stdout. Past `timeout`
+    /// seconds the CLI is stopped and this throws `CLIError.timedOut`.
+    public func run(_ args: [String], timeout: TimeInterval = CLI.writeTimeout) async throws -> Data {
         let config = config, home = home
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(with: Result { try Self.runBlocking(config: config, home: home, args: args) })
+                continuation.resume(with: Result { try Self.runBlocking(config: config, home: home, args: args, timeout: timeout) })
             }
         }
     }
 
-    private static func runBlocking(config: InstallConfig, home: URL?, args: [String]) throws -> Data {
+    private static func runBlocking(config: InstallConfig, home: URL?, args: [String], timeout: TimeInterval) throws -> Data {
         let fm = FileManager.default
         guard fm.isExecutableFile(atPath: config.node), fm.fileExists(atPath: config.cli) else {
             throw CLIError.notInstalled
@@ -55,21 +67,44 @@ public struct CLI: Sendable {
         do { try process.run() } catch { throw CLIError.notInstalled }
 
         // Drain both pipes at once so a chatty child can't fill one and stall.
-        let errBox = DataBox()
+        let outBox = DataBox(), errBox = DataBox()
         let group = DispatchGroup()
-        group.enter()
-        DispatchQueue.global().async {
-            errBox.data = err.fileHandleForReading.readDataToEndOfFile()
-            group.leave()
+        for (pipe, box) in [(out, outBox), (err, errBox)] {
+            group.enter()
+            DispatchQueue.global().async {
+                box.data = pipe.fileHandleForReading.readDataToEndOfFile()
+                group.leave()
+            }
         }
-        let stdout = out.fileHandleForReading.readDataToEndOfFile()
-        group.wait()
-        process.waitUntilExit()
 
+        // Past the limit: ask it to stop, then make it.
+        let timedOut = Flag()
+        let stop = DispatchWorkItem {
+            guard process.isRunning else { return }
+            timedOut.set()
+            process.terminate()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: stop)
+        process.waitUntilExit()
+        stop.cancel()
+        // Something the CLI started can hold the pipes open after it exits; don't wait on it.
+        _ = group.wait(timeout: .now() + 2)
+
+        if timedOut.isSet { throw CLIError.timedOut }
         guard process.terminationStatus == 0 else {
             throw CLIError.failed(message(from: errBox.data))
         }
-        return stdout
+        return outBox.data
+    }
+
+    private final class Flag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+        func set() { lock.withLock { value = true } }
+        var isSet: Bool { lock.withLock { value } }
     }
 
     private final class DataBox: @unchecked Sendable { var data = Data() }
