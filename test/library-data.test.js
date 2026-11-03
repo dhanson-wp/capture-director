@@ -164,6 +164,19 @@ test('setEntries edits several at once', async () => {
 	assert.equal(await readFile(dbPath(), 'utf8'), before);
 });
 
+test('setEntries moves captures into a deep folder up to 300 characters', async () => {
+	await fresh();
+	await seed({ entries: [e('0000000000000001', 'a')] });
+	// Ten levels of 14 characters plus slashes: 149 characters, past the old 100 cap.
+	const deep = Array.from({ length: 10 }, (_, i) => `Level ${String(i).padStart(2, '0')} folder`).join('/').slice(0, 150);
+	assert.ok(deep.length > 100 && deep.length <= 300);
+	const [out] = await setEntries(['0000000000000001'], { project: deep });
+	assert.equal(out.project, normalizeFolder(deep));
+	const before = await readFile(dbPath(), 'utf8');
+	await assert.rejects(setEntries(['0000000000000001'], { project: 'x'.repeat(301) }), /at most 300 characters/);
+	assert.equal(await readFile(dbPath(), 'utf8'), before);
+});
+
 test('forget keeps the file', async () => {
 	const dir = await fresh();
 	const video = await makeVideo(dir);

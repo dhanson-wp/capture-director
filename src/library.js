@@ -374,7 +374,15 @@ function applyEdits(entry, body) {
 		return v.trim();
 	};
 	if ('title' in body) entry.title = text(body.title, 200, 'title') || entry.title;
-	if ('project' in body) entry.project = normalizeFolder(text(body.project, 100, 'project')) || 'Unsorted';
+	if ('project' in body) {
+		if (typeof body.project !== 'string') throw Object.assign(new Error('Bad project'), { status: 400 });
+		// Folder paths may be as long as normalizeFolder allows (300), so deep folders can take captures.
+		try {
+			entry.project = normalizeFolder(body.project) || 'Unsorted';
+		} catch (err) {
+			throw Object.assign(err, { status: 400 });
+		}
+	}
 	if ('notes' in body) entry.notes = text(body.notes, 5000, 'notes');
 	if ('starred' in body) entry.starred = body.starred === true;
 }
