@@ -7,7 +7,7 @@ import path from 'node:path';
 import { launch } from './browser.js';
 import { ease, log, sleep } from './util.js';
 
-const PRIMARY = ['wait', 'waitFor', 'click', 'hover', 'move', 'camera', 'press', 'type', 'scroll', 'scrollTo', 'eval', 'hide', 'css', 'waitForImages'];
+const PRIMARY = ['wait', 'waitFor', 'click', 'hover', 'move', 'drag', 'camera', 'press', 'type', 'scroll', 'scrollTo', 'eval', 'hide', 'css', 'waitForImages'];
 
 // `- click: "#a"` and `- click: { target: "#a", zoom: 2 }` both become
 // { kind: 'click', target: '#a', zoom: 2 }.
@@ -23,6 +23,7 @@ export function normalizeStep(step) {
 	else if (kind === 'eval' || kind === 'css') out.code = value;
 	else if (kind === 'hide') out.selectors = [].concat(value);
 	else if (kind === 'move' && Array.isArray(value)) out.point = value;
+	else if (kind === 'drag' && Array.isArray(value)) out.by = value;
 	else if (kind === 'type') out.text = value;
 	else if (kind === 'scroll' && typeof value === 'number') out.by = value;
 	else out.target = value;
@@ -217,6 +218,23 @@ class Session {
 				await page.mouse.down();
 				this.events.push({ type: 'click', t: t0, x: p[0], y: p[1], zoom: step.zoom, focus, target: step.target });
 				await sleep(90);
+				await page.mouse.up();
+				this.presses.push({ t0, t1: this.now() + 0.06 });
+				if (step.hold) await sleep(step.hold);
+				return;
+			}
+			case 'drag': {
+				// Press, move with the button held, release: orbits 3D scenes, pans maps, drags sliders.
+				// No zoom; the cursor shows pressed for the whole drag.
+				if (step.from) await this.moveTo(await this.point({ ...step, target: step.from, to: undefined }), step.reach);
+				const [x0, y0] = this.mouse;
+				const end = step.by ? [x0 + step.by[0], y0 + step.by[1]] : await this.point({ ...step, target: step.to ?? step.target });
+				await sleep(step.settle ?? 140);
+				const t0 = this.now();
+				await page.mouse.down();
+				this.events.push({ type: 'drag', t: t0, x: x0, y: y0, x1: end[0], y1: end[1] });
+				await this.moveTo(end, step.duration ?? 1600);
+				await sleep(60);
 				await page.mouse.up();
 				this.presses.push({ t0, t1: this.now() + 0.06 });
 				if (step.hold) await sleep(step.hold);

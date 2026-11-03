@@ -144,6 +144,6 @@ export async function processShot(browser, shot, dir) {
 	]);
 	const info = await probe(out);
 	log(`${shot.id}: wrote ${out} (${info.width}x${info.height}, ${info.duration.toFixed(2)}s)`);
-	if (shot.source) await remember(out, { kind: 'clip', title: shot.id, project: shot.project, source: shot.source, shot: shot.id });
+	if (shot.source) await remember(out, { kind: 'clip', title: shot.id, project: shot.project, source: shot.source, shot: shot.id, url: cap.url });
 	return { id: shot.id, file: out, ...info, zooms: plan.groups.length };
 }

@@ -22,14 +22,71 @@ export function home() {
 }
 const dbFile = () => path.join(home(), 'library.json');
 const thumbDir = () => path.join(home(), 'thumbs');
-const idFor = (file) => createHash('sha256').update(file).digest('hex').slice(0, 16);
+
+// Web copies live in <home>/exports as <id>-<preset>.mp4. They go when their capture goes or moves.
+async function clearExports(id) {
+	const dir = path.join(home(), 'exports');
+	for (const name of await readdir(dir).catch(() => [])) if (name.startsWith(`${id}-`)) await rm(path.join(dir, name), { force: true });
+}
+export const idFor = (file) => createHash('sha256').update(file).digest('hex').slice(0, 16);
+
+// "a / b/" becomes "a/b". The top level ("Unsorted") is the empty path.
+export function normalizeFolder(p) {
+	const out = String(p ?? '').split('/').map((s) => s.trim()).filter(Boolean).join('/');
+	if (out.length > 300) throw new Error('Folder names can be at most 300 characters');
+	return out === 'Unsorted' ? '' : out;
+}
+
+// Every folder the app should show: the ones made on purpose, plus each parent of a clip's folder.
+export function folderPaths(db) {
+	// A path that can't be normalized (too long, from a hand edit or a rename) is skipped, so one bad entry can't block every save.
+	const tidy = (p) => {
+		try {
+			return normalizeFolder(p);
+		} catch {
+			return '';
+		}
+	};
+	const all = new Set();
+	// Each path also brings its parents, so "a/b" always has an "a".
+	const withParents = (p) => {
+		const parts = tidy(p).split('/').filter(Boolean);
+		for (let i = 1; i <= parts.length; i++) all.add(parts.slice(0, i).join('/'));
+	};
+	for (const f of db.folders || []) withParents(f);
+	for (const e of db.entries) withParents(e.project);
+	return [...all].sort();
+}
+
+// Folders renamed in the Mac app. New clips follow the rename instead of recreating the old folder.
+function renamed(project, renames) {
+	for (const key of Object.keys(renames).sort((a, b) => b.length - a.length)) {
+		if (project === key) return renames[key];
+		if (project.startsWith(`${key}/`)) return renames[key] + project.slice(key.length);
+	}
+	return project;
+}
+
+// The folder a new clip starts in. A rename that makes the path too long is ignored for that clip.
+function startFolder(project, renames) {
+	const base = normalizeFolder(project);
+	try {
+		return normalizeFolder(renamed(base, renames));
+	} catch {
+		return base;
+	}
+}
 
 export async function load() {
 	try {
 		const db = JSON.parse(await readFile(dbFile(), 'utf8'));
-		return { entries: Array.isArray(db.entries) ? db.entries : [] };
+		return {
+			entries: Array.isArray(db.entries) ? db.entries : [],
+			folders: Array.isArray(db.folders) ? db.folders : [],
+			renames: db.renames && typeof db.renames === 'object' && !Array.isArray(db.renames) ? db.renames : {},
+		};
 	} catch (err) {
-		if (err.code === 'ENOENT') return { entries: [] };
+		if (err.code === 'ENOENT') return { entries: [], folders: [], renames: {} };
 		throw new Error(`Can't read ${dbFile()}: ${err.message}`);
 	}
 }
@@ -38,23 +95,27 @@ export async function load() {
 async function save(db) {
 	await mkdir(home(), { recursive: true, mode: 0o700 });
 	const tmp = `${dbFile()}.${process.pid}.tmp`;
-	await writeFile(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
+	await writeFile(tmp, JSON.stringify({ ...db, folders: folderPaths(db) }, null, 2), { mode: 0o600 });
 	await rename(tmp, dbFile());
 }
 
 // Add or refresh a video. Edits made in the library (title, project, star, notes) are kept.
-export async function add(file, { kind = 'video', title, project, source, shot } = {}) {
+export async function add(file, { kind = 'video', title, project, source, shot, url } = {}) {
 	file = path.resolve(file);
 	const info = await probe(file);
+	const { size } = await stat(file);
 	const db = await load();
 	const now = new Date().toISOString();
 	let entry = db.entries.find((e) => e.file === file);
 	if (!entry) {
+		// Two paths hashing to one id is unlikely, but an id must never point at two files.
+		let id = idFor(file);
+		while (db.entries.some((e) => e.id === id)) id = randomBytes(8).toString('hex');
 		entry = {
-			id: idFor(file),
+			id,
 			file,
 			title: title || path.basename(file).replace(VIDEO, ''),
-			project: project || path.basename(path.dirname(source || file)),
+			project: startFolder(project || path.basename(path.dirname(source || file)), db.renames) || 'Unsorted',
 			kind,
 			starred: false,
 			notes: '',
@@ -63,9 +124,114 @@ export async function add(file, { kind = 'video', title, project, source, shot }
 		db.entries.push(entry);
 	}
 	Object.assign(entry, { kind, source: source ? path.resolve(source) : entry.source, shot: shot ?? entry.shot, updated: now });
-	Object.assign(entry, { duration: info.duration, width: info.width, height: info.height, hasAudio: info.hasAudio });
+	Object.assign(entry, { duration: info.duration, width: info.width, height: info.height, hasAudio: info.hasAudio, size });
+	if (url) entry.url = url;
 	await save(db);
 	await rm(path.join(thumbDir(), `${entry.id}.jpg`), { force: true });
+	return entry;
+}
+
+// ---------------------------------------------------------------------------
+// Changes the Mac app makes by calling `capture-director library ...`.
+// Each loads the library, changes it, and saves once. Video files are never touched.
+
+const inside = (p, folder) => p === folder || p.startsWith(`${folder}/`);
+
+export async function addFolder(p) {
+	const folder = normalizeFolder(p);
+	if (!folder) throw new Error('Pick a folder name');
+	const db = await load();
+	db.folders.push(folder);
+	await save(db);
+	return { folders: folderPaths(db) };
+}
+
+export async function renameFolder(from, to) {
+	from = normalizeFolder(from);
+	to = normalizeFolder(to);
+	if (!from || !to) throw new Error('Pick a folder name');
+	if (inside(to, from)) throw new Error("Can't move a folder into itself");
+	const db = await load();
+	const known = folderPaths(db);
+	if (!known.some((f) => inside(f, from))) throw new Error(`There's no folder called ${from}`);
+	if (known.includes(to)) throw new Error(`There's already a folder called ${to}`);
+	const move = (p) => (inside(p, from) ? to + p.slice(from.length) : p);
+	// Check every new path before changing anything, so a refusal leaves the library as it was.
+	const entries = db.entries.filter((x) => inside(normalizeFolder(x.project), from));
+	for (const p of [...db.folders.map(normalizeFolder), ...entries.map((x) => normalizeFolder(x.project))]) {
+		if (move(p).length > 300) throw new Error('That name makes a folder path longer than 300 characters');
+	}
+	for (const x of entries) x.project = move(normalizeFolder(x.project));
+	db.folders = db.folders.map(normalizeFolder).filter(Boolean).map(move);
+	// Earlier renames that pointed into the moved folder now point at its new home.
+	for (const key of Object.keys(db.renames)) db.renames[key] = move(db.renames[key]);
+	delete db.renames[to];
+	db.renames[from] = to;
+	await save(db);
+	return { folders: folderPaths(db), moved: entries.length };
+}
+
+export async function removeFolder(p) {
+	const folder = normalizeFolder(p);
+	if (!folder) throw new Error('Pick a folder name');
+	const db = await load();
+	if (db.entries.some((x) => inside(normalizeFolder(x.project), folder))) throw new Error(`${folder} isn't empty`);
+	db.folders = db.folders.map(normalizeFolder).filter((f) => f && !inside(f, folder));
+	await save(db);
+	return { folders: folderPaths(db) };
+}
+
+// Looks every id up before the first change, so one unknown id changes nothing.
+function pick(db, ids) {
+	if (!ids.length) throw new Error('Pick at least one capture');
+	return [...new Set(ids)].map((id) => {
+		const entry = db.entries.find((x) => x.id === id);
+		if (!entry) throw new Error(`No capture with id ${id}`);
+		return entry;
+	});
+}
+
+export async function setEntries(ids, edits = {}) {
+	const db = await load();
+	const picked = pick(db, ids);
+	const body = {};
+	for (const k of ['project', 'starred', 'title', 'notes']) if (edits[k] !== undefined) body[k] = edits[k];
+	const now = new Date().toISOString();
+	for (const entry of picked) {
+		applyEdits(entry, body);
+		entry.edited = now;
+	}
+	await save(db);
+	return picked;
+}
+
+// Removes entries and thumbnails only. The video files stay where they are.
+export async function forget(ids) {
+	const db = await load();
+	const picked = pick(db, ids);
+	const gone = new Set(picked.map((x) => x.id));
+	db.entries = db.entries.filter((x) => !gone.has(x.id));
+	await save(db);
+	for (const id of gone) {
+		await rm(path.join(thumbDir(), `${id}.jpg`), { force: true });
+		await clearExports(id);
+	}
+	return { forgotten: [...gone] };
+}
+
+// Point an entry at a moved file. The id stays, so folders, stars, and notes stay with it.
+export async function relocate(id, file) {
+	if (!VIDEO.test(String(file))) throw new Error('Only .mp4, .mov, and .m4v videos');
+	file = path.resolve(file);
+	const info = await probe(file);
+	const { size } = await stat(file);
+	const db = await load();
+	const [entry] = pick(db, [id]);
+	if (db.entries.some((x) => x.id !== id && x.file === file)) throw new Error('That video is already in the library');
+	Object.assign(entry, { file, size, duration: info.duration, width: info.width, height: info.height, hasAudio: info.hasAudio, updated: new Date().toISOString() });
+	await save(db);
+	await rm(path.join(thumbDir(), `${id}.jpg`), { force: true });
+	await clearExports(id);
 	return entry;
 }
 
@@ -218,7 +384,15 @@ function applyEdits(entry, body) {
 		return v.trim();
 	};
 	if ('title' in body) entry.title = text(body.title, 200, 'title') || entry.title;
-	if ('project' in body) entry.project = text(body.project, 100, 'project') || 'Unsorted';
+	if ('project' in body) {
+		if (typeof body.project !== 'string') throw Object.assign(new Error('Bad project'), { status: 400 });
+		// Folder paths may be as long as normalizeFolder allows (300), so deep folders can take captures.
+		try {
+			entry.project = normalizeFolder(body.project) || 'Unsorted';
+		} catch (err) {
+			throw Object.assign(err, { status: 400 });
+		}
+	}
 	if ('notes' in body) entry.notes = text(body.notes, 5000, 'notes');
 	if ('starred' in body) entry.starred = body.starred === true;
 }
@@ -290,6 +464,7 @@ export async function serve({ port = 7465, open = true } = {}) {
 				db.entries = db.entries.filter((e) => e.id !== entry.id);
 				await save(db);
 				await rm(path.join(thumbDir(), `${entry.id}.jpg`), { force: true });
+				await clearExports(entry.id);
 				return send(res, 200, { ok: true });
 			}
 			return send(res, 405, { error: 'Not allowed' });

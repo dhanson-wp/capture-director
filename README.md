@@ -108,6 +108,7 @@ Each step has one main key. A bare value is the target; extra keys are options.
 | `click` | `- click: "#buy"` | Eased cursor move, then a click. Options: `zoom` (number or `false`), `zoomOn`, `duration` (move ms), `offset: [x, y]`, `hold` (ms after), `inView` (use the first match fully on screen) and `skip` (pass over that many on-screen matches first) |
 | `hover` | `- hover: ".card"` | Same options as `click` |
 | `move` | `- move: [800, 400]` | Cursor only, no zoom. Takes a selector too |
+| `drag` | `- drag: [-400, 30]` | Press, move with the button held, release, from wherever the cursor is. Orbits 3D scenes, pans maps, drags sliders. Or `{ from, to }` with points or selectors. Options: `duration` (ms), `hold`. No zoom |
 | `camera` | `- camera: "#hero"` | A push-in with no cursor. Options: `zoom`, `duration` (ms), `hold` (ms; stays to the end by default), `fit: false` to zoom past the box size |
 | `scroll` | `- scroll: { by: 600, duration: 1400 }` | Eased in-page scroll. Or `to: selector` with `block: center`, `start`, or `end` |
 | `press` | `- press: ArrowRight` | Any Playwright key name |
@@ -169,6 +170,14 @@ capture-director sheet <video.mp4> [--every 1]        # contact sheet PNG
 capture-director stills <video.mp4> 1.5,4,8           # full-size PNG stills
 capture-director library                              # browse and organize everything you've made
 capture-director library add <folder or video>        # bring in videos made before the library
+capture-director library folder add clients/acme      # make a folder (nest with /)
+capture-director library folder rename acme acme-2026 # rename or move a folder and everything in it
+capture-director library folder remove clients/acme   # remove an empty folder
+capture-director library set <id>... --project clients/acme --star   # retitle, move, star, or add notes
+capture-director library forget <id>...               # drop captures from the library; videos stay on disk
+capture-director library export <id> [--preset web|small]   # make a smaller copy for size-limited uploads
+capture-director library relocate <id> <new path>     # point a capture at its video's new location
+capture-director install-app [--dir /Applications]    # build and install the Mac app
 ```
 
 If a shot's frames ever come back the wrong size, the recorder stops with an error instead of stretching them. Setting `CD_CHROME_CHANNEL=bundled` switches to Playwright's cached headless shell.
@@ -194,6 +203,21 @@ It works a bit like Screen Studio's or Loom's library. Captures show as a grid o
 The library is a list of pointers, kept in `~/.capture-director/library.json`. Your videos stay where they were rendered. "Remove from library" forgets an entry and never touches the file; deleting a video is something you do in Finder.
 
 Already have videos? `capture-director library add ~/Projects/demos` walks a folder and adds every `.mp4`, `.mov`, and `.m4v` it finds. Set `CD_HOME` to keep the library somewhere else, or `CD_NO_LIBRARY=1` to stop `record` and `render` from adding to it.
+
+### Mac app
+
+I also built a native Mac app on top of the same library. It's the quickest way to find a clip, sort it into folders, and get the real file into whatever upload page you're staring at: drag a capture straight out of the grid and drop it on the page. If a site caps upload size, the app can make a web or small copy first, and you drag that instead.
+
+```bash
+capture-director install-app                     # installs to /Applications
+capture-director install-app --dir ~/Applications   # or just for you
+```
+
+If you can't write to /Applications (it takes an admin account), it goes in ~/Applications instead. You don't need Xcode; the Command Line Tools are enough to build it. It needs macOS 26 or later.
+
+It's local only, like everything else here. It reads and writes the same `library.json`, so the browser library and the app always agree, and it never moves or deletes your videos.
+
+Agents get the same powers from the command line. `library export` makes the smaller copy, `library set` takes ids before flags, and `library relocate` fixes an entry after you've moved a file.
 
 ## Using it from Claude Code or Codex
 
