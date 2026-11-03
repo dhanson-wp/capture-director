@@ -47,6 +47,8 @@ test('steps normalize from short and long forms', () => {
 	assert.deepEqual(normalizeStep({ scroll: 400 }), { kind: 'scroll', by: 400 });
 	assert.deepEqual(normalizeStep(500), { kind: 'wait', ms: 500 });
 	assert.deepEqual(normalizeStep({ move: [10, 20], duration: 300 }), { kind: 'move', point: [10, 20], duration: 300 });
+	assert.deepEqual(normalizeStep({ drag: [-300, 40], duration: 2000 }), { kind: 'drag', by: [-300, 40], duration: 2000 });
+	assert.deepEqual(normalizeStep({ drag: { from: [900, 500], to: [600, 520] } }), { kind: 'drag', from: [900, 500], to: [600, 520] });
 });
 
 test('camera moves push in from when they are logged and hold to the end', () => {

@@ -108,6 +108,7 @@ Each step has one main key. A bare value is the target; extra keys are options.
 | `click` | `- click: "#buy"` | Eased cursor move, then a click. Options: `zoom` (number or `false`), `zoomOn`, `duration` (move ms), `offset: [x, y]`, `hold` (ms after), `inView` (use the first match fully on screen) and `skip` (pass over that many on-screen matches first) |
 | `hover` | `- hover: ".card"` | Same options as `click` |
 | `move` | `- move: [800, 400]` | Cursor only, no zoom. Takes a selector too |
+| `drag` | `- drag: [-400, 30]` | Press, move with the button held, release, from wherever the cursor is. Orbits 3D scenes, pans maps, drags sliders. Or `{ from, to }` with points or selectors. Options: `duration` (ms), `hold`. No zoom |
 | `camera` | `- camera: "#hero"` | A push-in with no cursor. Options: `zoom`, `duration` (ms), `hold` (ms; stays to the end by default), `fit: false` to zoom past the box size |
 | `scroll` | `- scroll: { by: 600, duration: 1400 }` | Eased in-page scroll. Or `to: selector` with `block: center`, `start`, or `end` |
 | `press` | `- press: ArrowRight` | Any Playwright key name |
