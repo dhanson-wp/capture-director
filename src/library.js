@@ -22,6 +22,12 @@ export function home() {
 }
 const dbFile = () => path.join(home(), 'library.json');
 const thumbDir = () => path.join(home(), 'thumbs');
+
+// Web copies live in <home>/exports as <id>-<preset>.mp4. They go when their capture goes or moves.
+async function clearExports(id) {
+	const dir = path.join(home(), 'exports');
+	for (const name of await readdir(dir).catch(() => [])) if (name.startsWith(`${id}-`)) await rm(path.join(dir, name), { force: true });
+}
 export const idFor = (file) => createHash('sha256').update(file).digest('hex').slice(0, 16);
 
 // "a / b/" becomes "a/b". The top level ("Unsorted") is the empty path.
@@ -206,7 +212,10 @@ export async function forget(ids) {
 	const gone = new Set(picked.map((x) => x.id));
 	db.entries = db.entries.filter((x) => !gone.has(x.id));
 	await save(db);
-	for (const id of gone) await rm(path.join(thumbDir(), `${id}.jpg`), { force: true });
+	for (const id of gone) {
+		await rm(path.join(thumbDir(), `${id}.jpg`), { force: true });
+		await clearExports(id);
+	}
 	return { forgotten: [...gone] };
 }
 
@@ -222,6 +231,7 @@ export async function relocate(id, file) {
 	Object.assign(entry, { file, size, duration: info.duration, width: info.width, height: info.height, hasAudio: info.hasAudio, updated: new Date().toISOString() });
 	await save(db);
 	await rm(path.join(thumbDir(), `${id}.jpg`), { force: true });
+	await clearExports(id);
 	return entry;
 }
 

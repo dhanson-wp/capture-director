@@ -3,6 +3,7 @@ import path from 'node:path';
 import { record, processAll } from '../src/shots.js';
 import { render, contactSheet, stills } from '../src/render.js';
 import { serve, importPath, addFolder, renameFolder, removeFolder, setEntries, forget, relocate } from '../src/library.js';
+import { exportEntry } from '../src/export.js';
 import { installApp } from '../src/install-app.js';
 
 const HELP = `capture-director: record polished website demo clips without a human at the wheel
@@ -22,6 +23,7 @@ Usage:
   capture-director library set <id>... [--project <path>] [--star|--unstar] [--title <text>] [--notes <text>]
                                                         Change one or more captures
   capture-director library forget <id>...               Drop captures from the library; the videos stay on disk
+  capture-director library export <id> [--preset web|small]  Make a smaller copy for size-limited uploads
   capture-director library relocate <id> <new path>     Point a capture at its video's new location
   capture-director install-app [--dir ~/Applications]   Build and install the Mac app
 
@@ -82,6 +84,9 @@ async function main() {
 			} else if (f._[0] === 'relocate') {
 				if (!f._[1] || !f._[2]) throw new Error('library relocate needs an id and a new path');
 				result = await relocate(f._[1], f._[2]);
+			} else if (f._[0] === 'export') {
+				if (!f._[1]) throw new Error('library export needs an id');
+				result = await exportEntry(f._[1], { preset: f.preset === undefined ? 'web' : f.preset });
 			} else {
 				const { url, port, library } = await serve({ port: f.port === undefined ? undefined : Number(f.port), open: !f['no-open'] });
 				result = { url, port, library };
