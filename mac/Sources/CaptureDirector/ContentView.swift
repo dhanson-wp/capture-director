@@ -26,8 +26,16 @@ final class Browser {
     }
     /// The capture playing in the player sheet.
     var player: LibraryEntry? { didSet { MenuState.shared.update(self) } }
-    /// A text field other than search is being edited (the inspector sets this in Task 9).
-    var editingText = false { didSet { MenuState.shared.update(self) } }
+    /// A text field other than search is being edited: a folder name in the sidebar, or a
+    /// field that some owner (the inspector, the New folder alert) said it's editing.
+    /// Derived, so one edit ending can never free the keys while another is still typing.
+    var editingText: Bool { renamingFolder != nil || !editors.isEmpty }
+    /// Who's editing text right now, by name. Each owner adds and removes only itself.
+    private(set) var editors: Set<String> = [] { didSet { MenuState.shared.update(self) } }
+    /// Says that `owner` started or stopped editing text.
+    func editing(_ owner: String, _ on: Bool) {
+        if on { editors.insert(owner) } else { editors.remove(owner) }
+    }
     /// Bare-key shortcuts (Space, Quick Look) are free: no text field is
     /// focused and no sheet is open. Anything that takes keys sets one of these.
     var keysFree: Bool { !searchFocused && !editingText && player == nil && confirmingRemove == nil }
@@ -59,12 +67,13 @@ final class Browser {
     var confirmingRemove: [LibraryEntry]? { didSet { MenuState.shared.update(self) } }
     /// New folder (⇧⌘N). ContentView sets it once the window is up.
     var newFolder: (() -> Void)? { didSet { MenuState.shared.update(self) } }
-    /// The folder whose name is open for editing in the sidebar. Bare-key shortcuts
-    /// step aside while it is: starting sets `editingText`, and every way out clears it.
-    var renamingFolder: String? {
-        didSet {
-            if renamingFolder != nil { editingText = true } else if oldValue != nil { editingText = false }
-        }
+    /// The folder whose name is open for editing in the sidebar. Bare-key shortcuts step
+    /// aside while it's set. Starting another rename replaces it; a field that's leaving
+    /// calls `endRename(_:)` with its own path, so it never closes the newer one.
+    var renamingFolder: String? { didSet { MenuState.shared.update(self) } }
+    /// The rename of `path` is over, if it's still the one open.
+    func endRename(_ path: String) {
+        if renamingFolder == path { renamingFolder = nil }
     }
     /// Folders the person closed in the sidebar. Every folder starts open.
     var closedFolders: Set<String> = []

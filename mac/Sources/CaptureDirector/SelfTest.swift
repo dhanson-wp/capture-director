@@ -150,9 +150,9 @@ enum SelfTest {
         b.player = tour
         check("Quick Look and play are off while the player is open", !menu.canQuickLook && !menu.canPlay)
         b.player = nil
-        b.editingText = true
+        b.editing("selftest", true)
         check("Quick Look and play are off while a text field is being edited", !menu.canQuickLook && !menu.canPlay)
-        b.editingText = false
+        b.editing("selftest", false)
         b.selection = []
     }
 
@@ -178,9 +178,9 @@ enum SelfTest {
         // Remove from library: on with a selection, asks first, and steps aside while typing.
         b.selection = [gallery.id]
         check("Remove from library is on with a selection", b.removeSelected != nil && menu.canRemove)
-        b.editingText = true
+        b.editing("selftest", true)
         check("Remove from library is off while a text field is being edited", !menu.canRemove)
-        b.editingText = false
+        b.editing("selftest", false)
         b.removeSelected?()
         check("Remove from library asks first, about the selection", b.confirmingRemove == [gallery])
         check("Space and Command-Delete are off while it asks", !menu.canRemove && !menu.canQuickLook)
@@ -353,6 +353,24 @@ enum SelfTest {
               b.editingText && !menu.canQuickLook && !menu.canPlay && !menu.canRemove)
         b.renamingFolder = nil
         check("leaving the name gives the keys back", !b.editingText && menu.canQuickLook)
+
+        // Starting a second rename while the first is open: the first field's exit
+        // (its own endRename) leaves the second open and the keys still blocked.
+        b.renamingFolder = "Spacefast"
+        b.renamingFolder = "New folder"
+        b.endRename("Spacefast")
+        check("renaming B while A is open keeps B open and the keys blocked",
+              b.renamingFolder == "New folder" && b.editingText && !menu.canQuickLook && !menu.canRemove,
+              "renaming \(b.renamingFolder ?? "nil")")
+        // An inspector field and a folder name each own their part: one ending doesn't free the other.
+        b.editing("inspector", true)
+        b.endRename("New folder")
+        check("a folder name ending leaves the inspector's typing alone", b.renamingFolder == nil && b.editingText && !menu.canQuickLook)
+        b.renamingFolder = "New folder"
+        b.editing("inspector", false)
+        check("the inspector ending leaves a folder name being edited alone", b.editingText && !menu.canQuickLook)
+        b.endRename("New folder")
+        check("with both done, the keys come back", !b.editingText && menu.canQuickLook)
         b.selection = []
 
         b.item = .all

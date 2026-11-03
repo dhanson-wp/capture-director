@@ -144,7 +144,7 @@ private struct SingleInspector: View {
         }
         .formStyle(.grouped)
         .onChange(of: focus) { old, new in
-            model.browser.editingText = new != nil
+            model.browser.editing("inspector", new != nil)
             if old == .title, new != .title { commitTitle() }
             if old == .notes, new != .notes { saveNotes() }
         }
@@ -165,7 +165,7 @@ private struct SingleInspector: View {
         .onDisappear {
             commitTitle()
             saveNotes()
-            model.browser.editingText = false
+            model.browser.editing("inspector", false)
         }
     }
 
@@ -444,7 +444,7 @@ private struct FolderPicker: View {
             Text("Use a slash to put it inside another folder, like blog/Launch.")
         }
         // Space and Command-Delete stay with the text field while the alert is up.
-        .onChange(of: naming) { _, on in model.browser.editingText = on }
+        .onChange(of: naming) { _, on in model.browser.editing("new-folder-alert", on) }
     }
 
     private func choose(_ value: String) {

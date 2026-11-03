@@ -178,7 +178,6 @@ private struct FolderNameField: View {
             .onChange(of: focused) { _, on in if !on { commit() } }
             .onAppear {
                 name = FolderPath.name(path)
-                model.browser.editingText = true
                 Task {
                     focused = true
                     // Select the whole name, ready to type over.
@@ -186,24 +185,22 @@ private struct FolderNameField: View {
                     NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
                 }
             }
-            .onDisappear {
-                // However the field goes (a reload, the folder deleted elsewhere), keys come back.
-                if model.browser.renamingFolder == path { model.browser.renamingFolder = nil }
-                model.browser.editingText = false
-            }
+            // However the field goes (another rename started, a reload), a typed name is kept,
+            // and only this field's own rename ends, never a newer one.
+            .onDisappear(perform: commit)
     }
 
     private func commit() {
         guard !done else { return }
         done = true
         let target = FolderEdit.renameTarget(path, to: name)
-        model.browser.renamingFolder = nil
+        model.browser.endRename(path)
         if let target { Task { await model.renameFolder(path, to: target) } }
     }
 
     private func cancel() {
         done = true
-        model.browser.renamingFolder = nil
+        model.browser.endRename(path)
     }
 }
 
