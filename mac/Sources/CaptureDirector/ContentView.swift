@@ -18,8 +18,9 @@ final class Browser {
     var selection: Set<LibraryEntry.ID> = [] {
         didSet {
             // A selection made another way (the list, a reload) moves the ⇧-click anchor too.
-            if selection.count == 1 { anchor = selection.first }
+            if selection.count == 1 { anchor = selection.first; cursor = selection.first }
             else if let a = anchor, !selection.contains(a) { anchor = nil }
+            if selection.isEmpty { cursor = nil }
             MenuState.shared.update(self)
             QuickLook.shared.selectionChanged()
         }
@@ -45,7 +46,7 @@ final class Browser {
     var layout: Layout = .grid {
         didSet {
             // The list keeps its own order; a range from the grid's anchor would be wrong there.
-            if layout != oldValue { anchor = nil }
+            if layout != oldValue { anchor = nil; cursor = nil }
             MenuState.shared.update(self)
         }
     }
@@ -55,6 +56,8 @@ final class Browser {
     var searchFocused = false { didSet { MenuState.shared.update(self) } }
     /// The last plain or ⌘-clicked capture, where a ⇧-click range starts.
     var anchor: LibraryEntry.ID?
+    /// The card the arrow keys move from: the last one clicked or moved to.
+    var cursor: LibraryEntry.ID?
     /// Starred captures and folder paths, kept by ContentView for the Capture menu.
     var starredIDs: Set<LibraryEntry.ID> = [] { didSet { MenuState.shared.update(self) } }
     var folderPaths: [String] = [] { didSet { MenuState.shared.update(self) } }
@@ -96,6 +99,32 @@ final class Browser {
             selection = [id]
             anchor = id
         }
+        cursor = id
+    }
+
+    /// An arrow key in the grid. It acts like a click on the card it lands on, so ⇧
+    /// extends the selection from the anchor and ⌘ adds or removes that card.
+    /// Returns false when the key isn't the grid's to take.
+    @discardableResult
+    func move(_ direction: GridMove.Direction, in order: [LibraryEntry.ID], columns: Int,
+              modifiers: NSEvent.ModifierFlags) -> Bool {
+        guard keysFree else { return false }
+        // With no cursor (a selection made in the list), go on from the first selected card.
+        let from = (cursor ?? order.first { selection.contains($0) }).flatMap { order.firstIndex(of: $0) }
+        guard let to = GridMove.next(from: from, direction, count: order.count, columns: columns) else { return false }
+        // ⇧ with nothing to extend from starts the range where the cursor is.
+        if modifiers.contains(.shift), anchor == nil { anchor = from.map { order[$0] } ?? order[to] }
+        click(order[to], in: order, modifiers: modifiers.intersection([.shift, .command]))
+        return true
+    }
+
+    /// Select all (⌘A) in the grid: every capture on the page.
+    @discardableResult
+    func selectAll(_ order: [LibraryEntry.ID]) -> Bool {
+        guard keysFree, !order.isEmpty else { return false }
+        selection = Set(order)
+        if anchor == nil { anchor = order.first }
+        return true
     }
 }
 

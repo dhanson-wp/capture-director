@@ -76,6 +76,40 @@ enum SelfTest {
         b.click("d", in: order, modifiers: .shift)
         check("Shift-click selects the range", b.selection == ["b", "c", "d"])
 
+        // Arrow keys and ⌘A in a grid of seven cards, three to a row.
+        let grid = ["a", "b", "c", "d", "e", "f", "g"]
+        let k = Browser()
+        k.move(.down, in: grid, columns: 3, modifiers: [])
+        check("an arrow with nothing selected selects the first card", k.selection == ["a"])
+        k.move(.right, in: grid, columns: 3, modifiers: [])
+        k.move(.down, in: grid, columns: 3, modifiers: [])
+        check("Right then Down moves along the row, then down the column", k.selection == ["e"])
+        k.move(.down, in: grid, columns: 3, modifiers: [])
+        check("Down over a short last row lands on the last card", k.selection == ["g"])
+        k.click("b", in: grid, modifiers: [])
+        k.move(.right, in: grid, columns: 3, modifiers: .shift)
+        k.move(.down, in: grid, columns: 3, modifiers: .shift)
+        check("Shift-arrows extend the selection from the anchor", k.selection == ["b", "c", "d", "e", "f"])
+        k.move(.up, in: grid, columns: 3, modifiers: .shift)
+        check("Shift-arrow back shrinks it", k.selection == ["b", "c"])
+        k.move(.down, in: grid, columns: 3, modifiers: .command)
+        check("Command-arrow adds the card it lands on", k.selection == ["b", "c", "f"])
+        k.move(.up, in: grid, columns: 3, modifiers: .command)
+        check("Command-arrow onto a selected card removes it", k.selection == ["b", "f"])
+        k.selectAll(grid)
+        check("Select all selects every card on the page", k.selection == Set(grid))
+        k.selection = ["a"]
+        k.editing("inspector", true)
+        check("arrows and Select all wait while text is being edited",
+              !k.move(.right, in: grid, columns: 3, modifiers: []) && !k.selectAll(grid) && k.selection == ["a"])
+        k.editing("inspector", false)
+        k.searchFocused = true
+        check("arrows leave the search field alone", !k.move(.right, in: grid, columns: 3, modifiers: []) && k.selection == ["a"])
+        k.searchFocused = false
+        k.layout = .list
+        k.move(.right, in: grid, columns: 3, modifiers: [])
+        check("after a layout switch, the arrows go on from the selection", k.selection == ["b"])
+
         // The menu bar has every browsing shortcut, once.
         func items(_ menu: NSMenu?) -> [NSMenuItem] {
             (menu?.items ?? []).flatMap { [$0] + items($0.submenu) }
