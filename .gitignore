@@ -1,9 +1,38 @@
+# Dependencies and build output
 node_modules/
 out/
-*.mp4
-!examples/**/*.mp4
-.DS_Store
 output/
+
+# Recordings and renders (only the examples ship their clips)
+*.mp4
+*.mov
+*.webm
+!examples/**/*.mp4
+
+# Secrets, keys, and signing material
+.env
+.env.*
+*.pem
+*.key
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local agent and tool state
+.claude/
+.gstack/
+.spacefast/
 .impeccable/review/
+.impeccable/questions/
+.impeccable/hook.*.json
+.impeccable/config.local.json
 .playwright-cli/
 .superpowers/
+
+# macOS
+.DS_Store
