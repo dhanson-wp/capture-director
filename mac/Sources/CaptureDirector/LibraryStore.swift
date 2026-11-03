@@ -26,6 +26,8 @@ final class LibraryStore {
     @ObservationIgnored private var watcher: LibraryWatcher?
     @ObservationIgnored private let writes = SerialRunner()
     @ObservationIgnored private var poll: Task<Void, Never>?
+    @ObservationIgnored private var checking: Task<Void, Never>?
+    @ObservationIgnored private var recheck = false
 
     /// The folder library.json lives in.
     var home: URL { file.deletingLastPathComponent() }
@@ -47,25 +49,57 @@ final class LibraryStore {
         }
         w.start()
         watcher = w
+        // Weak, so the loop ends when the store goes away; stop() ends it sooner.
         poll = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                self?.refreshMissing()
+                guard let self else { return }
+                // A check that's still waiting on a slow drive isn't stacked on.
+                if self.checking == nil { await self.refreshMissing() }
             }
         }
     }
 
-    /// Checks every capture's file again. Only a change publishes, so a quiet second redraws nothing.
-    func refreshMissing() {
-        let now = Browse.missing(library.entries) { FileManager.default.fileExists(atPath: $0) }
-        if now != missing { missing = now }
+    /// Stops watching and polling.
+    func stop() {
+        poll?.cancel()
+        poll = nil
+        checking?.cancel()
+        watcher = nil
+    }
+
+    /// Checks every capture's file again, off the main actor: a video on a sleeping
+    /// drive or a stalled share can take seconds to stat. Only a change publishes, so a
+    /// quiet second redraws nothing. A call while a check runs waits for it, and the
+    /// check then runs once more, so a change just made is never missed.
+    func refreshMissing() async {
+        if let running = checking {
+            recheck = true
+            await running.value
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            while let self {
+                self.recheck = false
+                let entries = self.library.entries
+                let found = await Task.detached(priority: .utility) {
+                    Browse.missing(entries) { FileManager.default.fileExists(atPath: $0) }
+                }.value
+                if Task.isCancelled { break }
+                if found != self.missing { self.missing = found }
+                if !self.recheck { break }
+            }
+            self?.checking = nil
+        }
+        checking = task
+        await task.value
     }
 
     /// Keeps the last good library if the file can't be read.
     func reload() {
         do {
             library = try LibraryReader.load(from: file)
-            refreshMissing()
+            Task { await refreshMissing() }
             hasLoaded = true
             readError = nil
         } catch {
@@ -125,6 +159,7 @@ final class LibraryStore {
                 _ = try await cli.run(args)
                 self?.problem = nil
                 self?.reload()
+                await self?.refreshMissing()
             } catch let error as CLIError {
                 self?.problem = error.message
             } catch {

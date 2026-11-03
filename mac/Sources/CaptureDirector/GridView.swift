@@ -113,6 +113,8 @@ struct CaptureCard: View {
     private struct PosterKey: Hashable {
         let id: String
         let changed: Date?
+        /// A video that comes back at the same path gets its poster again.
+        let present: Bool
     }
 
     /// Moving the pointer across the card scrubs through the clip in quarter-second steps.
@@ -157,7 +159,7 @@ struct CaptureCard: View {
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { frameWidth = $0 }
             .onContinuousHover { if !moved { scrub($0) } }
-            .task(id: PosterKey(id: entry.id, changed: entry.updated)) {
+            .task(id: PosterKey(id: entry.id, changed: entry.updated, present: !model.store.missing.contains(entry.id))) {
                 let image = await model.thumbnails.image(for: entry, at: nil)
                 if !Task.isCancelled { poster = image }
             }

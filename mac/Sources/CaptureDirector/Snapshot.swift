@@ -62,7 +62,7 @@ enum Snapshot {
     private static var mainWindow: NSWindow? { NSApp.windows.first { $0.canBecomeMain && !$0.isSheet } }
 
     /// Back to All captures in the grid with nothing selected, and the real library.
-    private static func reset(_ model: AppModel, library: Library) {
+    private static func reset(_ model: AppModel, library: Library) async {
         let b = model.browser
         b.item = .all
         b.layout = .grid
@@ -75,7 +75,7 @@ enum Snapshot {
             if let frame = defaultFrame, window.frame != frame { window.setFrame(frame, display: true) }
         }
         model.store.library = library
-        model.store.refreshMissing()
+        await model.store.refreshMissing()
     }
 
     /// APP_SNAPSHOT is set: this run takes snapshots and quits.
@@ -101,13 +101,13 @@ enum Snapshot {
             for mode in ["light", "dark"] {
                 NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
                 for page in pages where only?.contains(page.name) ?? true {
-                    reset(model, library: library)
+                    await reset(model, library: library)
                     page.show(model)
                     try? await Task.sleep(for: .seconds(0.8))
                     capture(to: "\(dir)/\(page.name)-\(mode).png")
                 }
             }
-            reset(model, library: library)
+            await reset(model, library: library)
             if only == nil || only?.contains("settings") == true {
                 let main = NSApp.windows.first { $0.canBecomeMain && !$0.isSheet }
                 openSettings()

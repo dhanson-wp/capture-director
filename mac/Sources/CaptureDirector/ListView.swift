@@ -13,7 +13,7 @@ struct ListView: View {
         @Bindable var browser = model.browser
         let rows = columnSort.isEmpty ? entries : entries.sorted(using: columnSort)
         // With several rows selected, a selected row's cells start one drag of them all.
-        let selected = rows.filter { browser.selection.contains($0.id) }
+        let selected = rows.filter { browser.selection.contains($0.id) && !model.store.missing.contains($0.id) }
         let multi = selected.count > 1 ? selected : nil
         let cell = { (entry: LibraryEntry) -> [LibraryEntry]? in
             browser.selection.contains(entry.id) ? multi : nil
@@ -136,6 +136,8 @@ private struct RowPoster: View {
     private struct PosterKey: Hashable {
         let id: String
         let changed: Date?
+        /// A video that comes back at the same path gets its poster again.
+        let present: Bool
     }
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.xs, style: .continuous) }
@@ -153,7 +155,7 @@ private struct RowPoster: View {
             .clipShape(shape)
             .frame(width: 48, height: 28)
             .accessibilityHidden(true)
-            .task(id: PosterKey(id: entry.id, changed: entry.updated)) {
+            .task(id: PosterKey(id: entry.id, changed: entry.updated, present: !model.store.missing.contains(entry.id))) {
                 let image = await model.thumbnails.image(for: entry, at: nil)
                 if !Task.isCancelled { poster = image }
             }

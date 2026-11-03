@@ -3,10 +3,13 @@
 # fixture library (tools/fixture.sh) in a scratch home.
 # Usage: tools/snap.sh            every page and Settings
 #        APP_SNAPSHOT_PAGES=all-grid,settings tools/snap.sh
-# Environment: CD_APP_DIR   folder with Capture Director.app (default ~/Applications)
+# Environment: CD_APP_DIR   folder with Capture Director.app (default /tmp/CaptureDirector-test-app,
+#              made with: node bin/capture-director.js install-app --dir /tmp/CaptureDirector-test-app)
 set -u
 here=${0:A:h}
-app="${CD_APP_DIR:-$HOME/Applications}/Capture Director.app/Contents/MacOS/CaptureDirector"
+appdir="${CD_APP_DIR:-/tmp/CaptureDirector-test-app}"
+app="$appdir/Capture Director.app/Contents/MacOS/CaptureDirector"
+[[ -x "$app" ]] || { echo "no app at $appdir. Install one there: node bin/capture-director.js install-app --dir $appdir" >&2; exit 1; }
 store=/tmp/CaptureDirector-test-home
 shots=/tmp/CaptureDirector-shots
 # A crashed run leaves saved window state, and the next launch would wait on a "reopen windows?" alert.

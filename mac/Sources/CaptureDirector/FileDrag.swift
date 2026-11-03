@@ -51,19 +51,17 @@ enum FileDrag {
 }
 
 extension View {
-    /// Drags these captures out as files, leaving out any whose file is gone. One capture uses `.draggable` with
+    /// Drags these captures out as files. Pass only captures whose file is there (the store's `missing` set tells), so a gone file never drags and nothing touches the disk while drawing. One capture uses `.draggable` with
     /// the file URL (checked into WordPress, YouTube, GitHub, Slack, and
     /// Finder); several start one AppKit session with a dragging item per file.
     /// Put it inside a view that keeps its own state: switching between one
     /// and several rebuilds what it wraps.
     @ViewBuilder
     func fileDrag(_ entries: [LibraryEntry]) -> some View {
-        // A capture whose file is gone has nothing to hand over, so it doesn't drag at all.
-        let files = entries.filter(\.fileExists)
-        if files.count == 1, let entry = files.first {
+        if entries.count == 1, let entry = entries.first {
             draggable(entry.fileURL)
-        } else if files.count > 1 {
-            modifier(MultiFileDrag(entries: files))
+        } else if entries.count > 1 {
+            modifier(MultiFileDrag(entries: entries))
         } else {
             self
         }
@@ -83,7 +81,7 @@ struct MultiFileDrag: ViewModifier {
                 .updating($started) { _, started, _ in
                     guard !started else { return }
                     started = true
-                    FileDrag.begin(entries.filter(\.fileExists))
+                    FileDrag.begin(entries)
                 },
             isEnabled: enabled
         )

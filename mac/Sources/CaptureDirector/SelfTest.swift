@@ -197,7 +197,7 @@ enum SelfTest {
         let other = entries[3]
         check("dragging an unselected capture carries only it",
               DragSet.entries(dragging: other, selection: b.selection, in: entries) == [other])
-        let existing = three.filter(\.fileExists)
+        let existing = model.present(three)
         let items = FileDrag.dragItems(existing)
         check("a several-file drag has one item per video, each a file URL",
               items.count == existing.count && zip(items, existing).allSatisfy { ($0.item as? NSURL) as URL? == $1.fileURL },
@@ -242,7 +242,7 @@ enum SelfTest {
               store.problem ?? "")
         let before = store.library.entries.count
         let gone = entries.last!
-        let had = gone.fileExists
+        let had = FileManager.default.fileExists(atPath: gone.file)
         await model.remove([gone])
         check("Remove from library forgets the capture and leaves its file alone",
               store.library.entries.count == before - 1 && current(gone.id) == nil
@@ -262,6 +262,7 @@ enum SelfTest {
             check("the moved-file fixtures are there", false)
             return
         }
+        await store.refreshMissing()
         check("the deleted fixture video is flagged missing, and the others aren't",
               store.missing == [quote.id], store.missing.sorted().description)
 

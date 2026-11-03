@@ -9,7 +9,10 @@
 #        ./build.sh --open     install, then quit the running copy and open the new one
 # Environment: CD_APP_DIR       install folder (default ~/Applications)
 #              CD_CONFIG_JSON   JSON written to Contents/Resources/config.json:
-#                               { "node", "cli", "path", "cdHome" }
+#                               { "node", "cli", "path", "cdHome" }. Unset, the installed
+#                               copy's config.json is kept. Prefer
+#                               node bin/capture-director.js install-app [--dir <folder>],
+#                               which sets it.
 set -euo pipefail
 here=${0:A:h}
 name="CaptureDirector"
@@ -39,6 +42,17 @@ fi
 appdir="${CD_APP_DIR:-$HOME/Applications}"
 app="$appdir/Capture Director.app"
 mkdir -p "$appdir"
+# The app's config.json (where node and the CLI are) isn't ours to lose: without
+# CD_CONFIG_JSON, keep the installed copy's so a plain rebuild doesn't break writes.
+kept=""
+if [[ -z "${CD_CONFIG_JSON:-}" ]]; then
+  if [[ -f "$app/Contents/Resources/config.json" ]]; then
+    kept=$(mktemp)
+    cp "$app/Contents/Resources/config.json" "$kept"
+  else
+    echo "warning: no config.json to keep, so this build can't run the CLI and every change will fail. Install with: node bin/capture-director.js install-app" >&2
+  fi
+fi
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/$name"
@@ -52,6 +66,8 @@ cp -X "$icns" "$app/Contents/Resources/"
 # Where the app finds node and the CLI. Written before codesign, which seals Resources.
 if [[ -n "${CD_CONFIG_JSON:-}" ]]; then
   print -r -- "$CD_CONFIG_JSON" > "$app/Contents/Resources/config.json"
+elif [[ -n "$kept" ]]; then
+  mv "$kept" "$app/Contents/Resources/config.json"
 fi
 xattr -cr "$app"
 sign_log=$(codesign --force --sign "$identity" "$app" 2>&1) || {

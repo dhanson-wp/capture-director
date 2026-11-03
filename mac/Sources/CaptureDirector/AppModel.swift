@@ -38,13 +38,13 @@ final class AppModel {
     /// The selected captures' videos in the order on screen, leaving out
     /// files that are gone. Quick Look, Copy video, and Show in Finder use these.
     func selectedURLs() -> [URL] {
-        selectedEntries().filter(\.fileExists).map(\.fileURL)
+        present(selectedEntries()).map(\.fileURL)
     }
 
     // Actions on the selection, shared by the inspector and the Capture menu.
 
     func copyVideos(_ entries: [LibraryEntry]) {
-        let urls = entries.filter(\.fileExists).map(\.fileURL)
+        let urls = present(entries).map(\.fileURL)
         if !urls.isEmpty { FileDrag.copy(urls) }
     }
 
@@ -56,7 +56,7 @@ final class AppModel {
     }
 
     func showInFinder(_ entries: [LibraryEntry]) {
-        let urls = entries.filter(\.fileExists).map(\.fileURL)
+        let urls = present(entries).map(\.fileURL)
         if !urls.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(urls) }
     }
 
@@ -78,7 +78,7 @@ final class AppModel {
 
     /// Plays a capture in the player sheet. A video that's gone says so instead.
     func play(_ entry: LibraryEntry) {
-        guard FileManager.default.fileExists(atPath: entry.file) else {
+        guard !store.missing.contains(entry.id) else {
             store.problem = "\(entry.title)'s video isn't at \(entry.file) anymore."
             return
         }
@@ -109,9 +109,4 @@ final class AppModel {
     func toggleQuickLook() {
         QuickLook.shared.toggle { [weak self] in self?.selectedURLs() ?? [] }
     }
-}
-
-extension LibraryEntry {
-    /// The video is still at its path. Drag, Share, and Copy need it.
-    var fileExists: Bool { FileManager.default.fileExists(atPath: file) }
 }
