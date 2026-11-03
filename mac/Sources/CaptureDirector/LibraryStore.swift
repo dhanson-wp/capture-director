@@ -149,6 +149,33 @@ final class LibraryStore {
         await write(["library", "folder", "remove", path])
     }
 
+    /// Makes (or reuses) a smaller copy of a capture for upload pages with size limits.
+    /// Nil on failure, with `problem` set. It doesn't touch library.json, so it skips the
+    /// serial runner: a long encode must not hold up a star click behind it.
+    func exportCopy(_ id: String, preset: String) async -> ExportResult? {
+        guard let cli else {
+            problem = CLIError.notInstalled.message
+            return nil
+        }
+        do {
+            let out = try await cli.run(["library", "export", id, "--preset", preset])
+            guard let result = ExportCopy.decode(out) else {
+                problem = "Capture Director couldn't read the copy's details."
+                return nil
+            }
+            return result
+        } catch let error as CLIError {
+            problem = error.message
+        } catch {
+            problem = error.localizedDescription
+        }
+        return nil
+    }
+
+    func export(_ id: String, preset: String) async -> URL? {
+        await exportCopy(id, preset: preset)?.url
+    }
+
     /// Runs the CLI off the main actor, then reloads. A failure becomes `problem`.
     /// Writes run one at a time in the order they were asked for: the CLI
     /// rewrites library.json without a lock, so two at once could lose one.

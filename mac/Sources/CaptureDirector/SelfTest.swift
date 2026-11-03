@@ -229,6 +229,21 @@ enum SelfTest {
         check("a new title saves", current(gallery.id)?.title == "Gallery scroll, take two", store.problem ?? "")
         await store.setNotes(gallery.id, "Use this one on the launch post.")
         check("notes save", current(gallery.id)?.notes == "Use this one on the launch post.", store.problem ?? "")
+        // A web copy lands in the home's exports folder, smaller, and a second ask reuses it.
+        if let copy = await store.exportCopy(gallery.id, preset: "web") {
+            let original = (try? FileManager.default.attributesOfItem(atPath: gallery.file))?[.size] as? Int ?? 0
+            check("a web copy is a smaller file under the home's exports folder",
+                  copy.url.path == ExportCopy.file(home: store.home, id: gallery.id, preset: "web").path
+                      && FileManager.default.fileExists(atPath: copy.file) && copy.size > 0 && copy.size < original,
+                  "copy \(copy.size), original \(original)")
+            check("the original is untouched by a copy", FileManager.default.fileExists(atPath: gallery.file))
+            let again = await store.exportCopy(gallery.id, preset: "web")
+            check("a second web copy is reused", again?.reused == true)
+        } else {
+            check("a web copy is made", false, store.problem ?? "")
+        }
+        check("a copy of an unknown capture fails with a problem", await store.export("nope", preset: "web") == nil && store.problem != nil)
+        store.problem = nil
         // Two writes handed in at once both land, in order: the second waits for the first.
         let first = Task { await store.setTitle(gallery.id, "First title") }
         let second = Task { await store.setNotes(gallery.id, "Second, after the title.") }

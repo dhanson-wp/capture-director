@@ -48,6 +48,9 @@ private struct SingleInspector: View {
     /// The last values sent to the CLI, so a commit and a focus change don't save twice.
     @State private var sentTitle: String
     @State private var sentNotes: String
+    /// The finished copy shown in the Web copy section, and the preset being made right now.
+    @State private var copy: ExportResult?
+    @State private var making: String?
 
     init(entry: LibraryEntry) {
         self.entry = entry
@@ -106,6 +109,10 @@ private struct SingleInspector: View {
             Section {
                 DragHandle(entries: [entry])
                 ShareActions(entries: [entry], enabled: exists)
+            }
+
+            if exists {
+                WebCopySection(entry: entry, copy: $copy, making: $making)
             }
 
             Section {
@@ -188,6 +195,109 @@ private struct SingleInspector: View {
         sentNotes = notes
         let store = model.store, id = entry.id, text = notes
         Task { await store.setNotes(id, text) }
+    }
+}
+
+/// Smaller copies for upload pages with size limits. The original is never touched.
+private struct WebCopySection: View {
+    @Environment(AppModel.self) private var model
+    let entry: LibraryEntry
+    @Binding var copy: ExportResult?
+    @Binding var making: String?
+
+    var body: some View {
+        Section {
+            if let making {
+                HStack(spacing: Space.sm) {
+                    ProgressView().controlSize(.small)
+                    Text(ExportCopy.working(making))
+                        .foregroundStyle(.secondary)
+                }
+            } else if let copy {
+                let url = copy.url
+                HStack(spacing: Space.md) {
+                    Image(systemName: "film")
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ExportCopy.summary(preset: copy.preset, size: copy.size, original: entry.size))
+                            .font(.callout)
+                        Text("Drag into an upload page")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "line.3.horizontal")
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+                .draggable(url)
+                .help("Drag the smaller copy into a browser, Slack, or Finder")
+                .accessibilityElement(children: .combine)
+                HStack(spacing: Space.sm) {
+                    ShareLink(item: url) {
+                        Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+                    }
+                    .help("Send the smaller copy with AirDrop, Mail, Messages, and more")
+                    Button {
+                        FileDrag.copy([url])
+                    } label: {
+                        Label("Copy", systemImage: "doc.on.doc").frame(maxWidth: .infinity)
+                    }
+                    .help("Copy the smaller file, to paste into Slack or Finder")
+                }
+                .buttonStyle(.bordered)
+                .foregroundStyle(Color.primary)
+            }
+            HStack(spacing: Space.sm) {
+                ForEach(ExportCopy.presets, id: \.self) { preset in
+                    Button("Make \(preset) copy") {
+                        make(preset)
+                    }
+                    .help(preset == "small" ? "Up to 1280 wide, smaller still" : "Up to 1920 wide, much smaller than a full recording")
+                }
+            }
+            .buttonStyle(.bordered)
+            .foregroundStyle(Color.primary)
+            .disabled(making != nil || !model.store.canWrite)
+        } header: {
+            Text("Web copy")
+        } footer: {
+            Text("Upload pages often cap file size. Copies are kept out of the way and your original is never changed.")
+        }
+        // A copy made earlier comes back quickly; the export is reused when it's still fresh.
+        .task(id: entry.id) { await restore() }
+    }
+
+    private func make(_ preset: String) {
+        guard making == nil else { return }
+        making = preset
+        let store = model.store, id = entry.id
+        Task {
+            let result = await store.exportCopy(id, preset: preset)
+            if let result { copy = result }
+            making = nil
+        }
+    }
+
+    /// Shows the newest copy already on disk, without making one nobody asked for.
+    private func restore() async {
+        guard copy == nil, making == nil else { return }
+        let home = model.store.home, id = entry.id
+        let newest = await Task.detached { () -> String? in
+            ExportCopy.presets
+                .compactMap { p -> (String, Date)? in
+                    let path = ExportCopy.file(home: home, id: id, preset: p).path
+                    guard let date = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date else { return nil }
+                    return (p, date)
+                }
+                .max { $0.1 < $1.1 }?.0
+        }.value
+        guard let newest, copy == nil, making == nil else { return }
+        making = newest
+        let result = await model.store.exportCopy(id, preset: newest)
+        if let result { copy = result }
+        making = nil
     }
 }
 

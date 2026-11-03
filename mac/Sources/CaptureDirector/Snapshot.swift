@@ -37,6 +37,23 @@ enum Snapshot {
             model.browser.showInspector = true
         },
         // A capture whose video is gone: the card, and the inspector's File moved section.
+        // A capture with a finished web copy (snap.sh makes it first), so the Web copy section shows the result.
+        Page(name: "inspector-copy") { model in
+            let entries = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now)
+            let pick = entries.first { $0.title == "Post formats tour" } ?? entries.first
+            model.browser.selection = Set([pick?.id].compactMap { $0 })
+            if let window = mainWindow, let screen = window.screen ?? NSScreen.main {
+                var frame = window.frame
+                frame.size.height = screen.visibleFrame.height
+                frame.origin.y = screen.visibleFrame.minY
+                window.setFrame(frame, display: true)
+            }
+            // After the resize has settled, or the inspector doesn't open in the second pass.
+            Task {
+                try? await Task.sleep(for: .seconds(0.3))
+                model.browser.showInspector = true
+            }
+        },
         Page(name: "inspector-moved") { model in
             let entries = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now)
             let pick = entries.first { model.store.missing.contains($0.id) }
