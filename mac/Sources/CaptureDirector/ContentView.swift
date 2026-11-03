@@ -57,8 +57,21 @@ final class Browser {
     var removeSelected: (() -> Void)? { didSet { MenuState.shared.update(self) } }
     /// The captures the Remove confirmation is asking about; nil when it isn't showing.
     var confirmingRemove: [LibraryEntry]? { didSet { MenuState.shared.update(self) } }
-    /// New folder (⇧⌘N). Task 11 sets it; until then the menu item is off.
+    /// New folder (⇧⌘N). ContentView sets it once the window is up.
     var newFolder: (() -> Void)? { didSet { MenuState.shared.update(self) } }
+    /// The folder whose name is open for editing in the sidebar. Bare-key shortcuts
+    /// step aside while it is: starting sets `editingText`, and every way out clears it.
+    var renamingFolder: String? {
+        didSet {
+            if renamingFolder != nil { editingText = true } else if oldValue != nil { editingText = false }
+        }
+    }
+    /// Folders the person closed in the sidebar. Every folder starts open.
+    var closedFolders: Set<String> = []
+    /// The last rename or move this app asked for, so the sidebar can follow the folder.
+    var lastRename: (from: String, to: String)?
+    /// The folder being dragged in the sidebar, so a drop target can say no to a move into itself.
+    var draggingFolder: String?
 
     /// A click on a card: plain selects only it, ⌘ adds or removes it,
     /// ⇧ selects the range from the anchor in the order on screen.
@@ -204,6 +217,7 @@ struct ContentView: View {
             now = Date()
             browser.starredIDs = Set(store.library.entries.filter(\.starred).map(\.id))
             browser.folderPaths = FolderTree.paths(store.library)
+            model.followFolder()
         }
         .onChange(of: store.missing, initial: true) { _, ids in browser.missingIDs = ids }
         .sheet(item: $browser.player) { entry in
@@ -223,6 +237,10 @@ struct ContentView: View {
                  : "The video files stay where they are. You can add them back with capture-director library add.")
         }
         .onAppear {
+            browser.newFolder = { [weak model] in
+                guard let model else { return }
+                Task { await model.newFolder() }
+            }
             browser.removeSelected = { [weak model] in
                 guard let model else { return }
                 let entries = model.selectedEntries()

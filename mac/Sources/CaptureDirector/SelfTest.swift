@@ -32,6 +32,7 @@ enum SelfTest {
             await thumbnails(model)
             await moved(model)
             await inspector(model)
+            await folders(model)
 
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
@@ -319,6 +320,113 @@ enum SelfTest {
         b.selection = [quote.id]
         check("Quick Look and play come back with the file", menu.canQuickLook && menu.canPlay)
         b.selection = []
+    }
+
+    /// New folder, rename in place, nesting, dropping captures, and Delete folder, with real CLI writes.
+    private static func folders(_ model: AppModel) async {
+        let store = model.store
+        let b = model.browser
+        let menu = MenuState.shared
+        check("New folder (Shift-Command-N) is on", menu.canAddFolder)
+        guard store.canWrite else {
+            print("SKIP folders: this build has no config.json, so it can't run the CLI")
+            return
+        }
+        guard let pricing = store.library.entries.first(where: { $0.title == "Pricing toggle" }) else {
+            check("the folder fixtures are there", false)
+            return
+        }
+        func paths() -> [String] { FolderTree.paths(store.library) }
+        func folder(_ id: String) -> String? { store.library.entries.first { $0.id == id }?.folder }
+        // Let ContentView see the reload, the way it does after any write.
+        func settle() async { try? await Task.sleep(for: .milliseconds(300)) }
+        store.problem = nil
+
+        b.item = .all
+        await model.newFolder()
+        // Selected right after, before the folder page drops it from the selection.
+        b.selection = [pricing.id]
+        check("New folder at the top level is called New folder, selected, and open for its name",
+              paths().contains("New folder") && b.item == .folder("New folder") && b.renamingFolder == "New folder",
+              "\(paths()) item \(b.item) renaming \(b.renamingFolder ?? "nil") \(store.problem ?? "")")
+        check("Space, Command-O, and Command-Delete step aside while a folder name is edited",
+              b.editingText && !menu.canQuickLook && !menu.canPlay && !menu.canRemove)
+        b.renamingFolder = nil
+        check("leaving the name gives the keys back", !b.editingText && menu.canQuickLook)
+        b.selection = []
+
+        b.item = .all
+        await model.newFolder()
+        b.renamingFolder = nil
+        check("the next one is New folder 2", paths().contains("New folder 2") && b.item == .folder("New folder 2"),
+              paths().description)
+        await model.newFolder()
+        b.renamingFolder = nil
+        check("New folder inside a selected folder goes in it",
+              paths().contains("New folder 2/New folder") && b.item == .folder("New folder 2/New folder"),
+              paths().description)
+        await model.deleteFolder("New folder 2/New folder")
+
+        guard let target = FolderEdit.renameTarget("New folder 2", to: "Drafts") else {
+            check("a rename target", false)
+            return
+        }
+        b.item = .folder("New folder 2")
+        await model.renameFolder("New folder 2", to: target)
+        check("rename in place changes the folder and the sidebar follows it",
+              paths().contains("Drafts") && !paths().contains("New folder 2") && b.item == .folder("Drafts"),
+              "\(paths()) item \(b.item) \(store.problem ?? "")")
+
+        await model.moveFolder("Drafts", into: "New folder")
+        check("dropping a folder on another nests it, and the sidebar follows",
+              paths().contains("New folder/Drafts") && !paths().contains("Drafts") && b.item == .folder("New folder/Drafts"),
+              "\(paths()) item \(b.item) \(store.problem ?? "")")
+        await model.moveFolder("New folder/Drafts", into: "")
+        check("dropping a folder on the Projects header moves it to the top level",
+              paths().contains("Drafts") && b.item == .folder("Drafts"), "\(paths()) item \(b.item)")
+
+        await model.renameFolder("Drafts", to: "Spacefast")
+        check("a refused rename shows the CLI's message and changes nothing",
+              store.problem == "There's already a folder called Spacefast" && paths().contains("Drafts") && b.item == .folder("Drafts"),
+              "\(store.problem ?? "no message") item \(b.item)")
+        store.problem = nil
+
+        // Captures dropped on a folder arrive as the same file URLs a drag to Finder carries.
+        let several = FileDrag.dragItems(model.present([pricing])).compactMap { ($0.item as? NSURL) as URL? }
+        check("the drag-out payload maps back to the dragged captures",
+              FolderEdit.entryIDs(dropped: several, in: store.library.entries) == [pricing.id])
+        // Finder can hand over /private/tmp for a file the library has under /tmp.
+        let linked = URL(fileURLWithPath: "/private" + pricing.file)
+        let moved = await model.dropCaptures([linked], on: "Drafts")
+        check("dropping a capture's file on a folder moves the capture there", moved && folder(pricing.id) == "Drafts",
+              "\(folder(pricing.id) ?? "gone") \(store.problem ?? "")")
+        check("the video file stays where it was", FileManager.default.fileExists(atPath: pricing.file))
+        let stranger = await model.dropCaptures([URL(fileURLWithPath: "/tmp/not-in-the-library.mp4")], on: "Drafts")
+        check("a file that isn't in the library isn't taken", !stranger)
+
+        check("a folder with a capture in it can't be deleted",
+              !FolderEdit.deletable(FolderTree.build(store.library)).contains("Drafts"))
+        await store.removeFolder("Drafts")
+        check("the CLI refuses it too", store.problem == "Drafts isn't empty" && paths().contains("Drafts"),
+              store.problem ?? "no message")
+        store.problem = nil
+
+        await model.dropCaptures([pricing.fileURL], on: "")
+        check("dropping on Unsorted takes the capture out of its folder", folder(pricing.id) == "", folder(pricing.id) ?? "gone")
+        check("an empty folder can be deleted", FolderEdit.deletable(FolderTree.build(store.library)).contains("Drafts"))
+        b.item = .folder("Drafts")
+        await model.deleteFolder("Drafts")
+        check("Delete folder removes it, and the sidebar goes to All captures",
+              !paths().contains("Drafts") && b.item == .all, "\(paths()) item \(b.item) \(store.problem ?? "")")
+
+        // Renamed somewhere else (the CLI in Terminal): the app didn't do it, so All captures.
+        b.item = .folder("New folder")
+        b.lastRename = nil
+        await store.renameFolder("New folder", to: "Renamed elsewhere")
+        await settle()
+        check("a folder renamed outside the app falls back to All captures", b.item == .all, "item \(b.item)")
+        await store.removeFolder("Renamed elsewhere")
+        b.item = .all
     }
 
     private static func menuItems(_ menu: NSMenu?) -> [NSMenuItem] {

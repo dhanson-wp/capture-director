@@ -71,6 +71,66 @@ final class AppModel {
         Task { await store.setProject(entries.map(\.id), path) }
     }
 
+    // Folders. Library-only: none of these touch a video file.
+
+    /// New folder (⇧⌘N, the + button, or a folder's context menu): "New folder", or the next
+    /// free number, inside `parent`, else the folder on screen, else at the top level.
+    /// It's selected and its name opens for editing.
+    func newFolder(in parent: String? = nil) async {
+        let b = browser
+        var parent = parent.map(FolderPath.normalize) ?? ""
+        if parent.isEmpty, case .folder(let p) = b.item { parent = FolderPath.normalize(p) }
+        let path = FolderEdit.newFolderPath(under: parent, existing: FolderTree.paths(store.library))
+        await store.addFolder(path)
+        guard FolderTree.paths(store.library).contains(path) else { return }
+        b.closedFolders.remove(parent)
+        b.item = .folder(path)
+        b.renamingFolder = path
+    }
+
+    /// Renames or moves a folder, remembering it just long enough for the sidebar to follow it
+    /// after the reload. Forgotten afterwards, so a refused rename, or a later delete, never
+    /// sends the sidebar to the name it asked for.
+    func renameFolder(_ from: String, to: String) async {
+        browser.lastRename = (from, to)
+        await store.renameFolder(from, to: to)
+        followFolder()
+        browser.lastRename = nil
+    }
+
+    /// A folder dropped on another, or on the Projects header (""). A drop that can't happen does nothing.
+    func moveFolder(_ path: String, into target: String) async {
+        guard let to = FolderEdit.moveTarget(path, into: target) else { return }
+        browser.closedFolders.remove(target)
+        await renameFolder(path, to: to)
+    }
+
+    /// Captures dropped on a folder ("" is Unsorted), found by their file URLs.
+    /// Returns false when none of the files are in the library.
+    @discardableResult
+    func dropCaptures(_ urls: [URL], on path: String) async -> Bool {
+        let all = FolderEdit.entryIDs(dropped: urls, in: store.library.entries)
+        guard !all.isEmpty else { return false }
+        let ids = FolderEdit.entryIDs(dropped: urls, in: store.library.entries, movingTo: path)
+        await store.setProject(ids, path)
+        return true
+    }
+
+    /// Delete folder, for a folder with nothing in it.
+    func deleteFolder(_ path: String) async {
+        await store.removeFolder(path)
+        followFolder()
+    }
+
+    /// After a reload: a sidebar folder that's gone goes to its new path when this app just
+    /// renamed it, else to All captures. ContentView calls this on every library change.
+    func followFolder() {
+        let b = browser
+        let next = FolderEdit.fallback(b.item, paths: FolderTree.paths(store.library), renamed: b.lastRename)
+        if next != b.item { b.item = next }
+        if let r = b.renamingFolder, !FolderTree.paths(store.library).contains(r) { b.renamingFolder = nil }
+    }
+
     /// Forgets the captures. The video files stay where they are.
     func remove(_ entries: [LibraryEntry]) async {
         await store.forget(entries.map(\.id))

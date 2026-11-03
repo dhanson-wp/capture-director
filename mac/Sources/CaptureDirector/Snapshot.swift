@@ -8,7 +8,7 @@ import SwiftUI
 /// writes <page>-light.png and <page>-dark.png for every page in `pages`, and
 /// settings-<tab>-light.png and settings-<tab>-dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
-/// APP_SNAPSHOT_PAGES=all-grid,starred limits the pages (inspector, inspector-multi, and inspector-tall show the inspector). Add "settings" to include Settings.
+/// APP_SNAPSHOT_PAGES=all-grid,starred limits the pages (folder-rename shows a folder name being edited; inspector, inspector-multi, and inspector-tall show the inspector). Add "settings" to include Settings.
 /// Add APP_ACCENT=<id> to see the pages in another accent.
 enum Snapshot {
     /// One state of the main window: a name and how to get there from a fresh browser.
@@ -22,6 +22,12 @@ enum Snapshot {
         Page(name: "all-list") { $0.browser.layout = .list },
         Page(name: "folder") { $0.browser.item = .folder("blog/Post formats") },
         Page(name: "starred") { $0.browser.item = .starred },
+        // An empty folder, and another one's name open for editing in place.
+        Page(name: "folder-rename") { model in
+            model.store.library.folders.append("Archive")
+            model.browser.item = .folder("Spacefast")
+            model.browser.renamingFolder = "Spacefast"
+        },
         Page(name: "empty") { $0.store.library = Library() },
         // A clip with a source site and a shot list, so every section shows.
         Page(name: "inspector") { model in
@@ -70,6 +76,7 @@ enum Snapshot {
         b.sort = .newest
         b.selection = []
         b.showInspector = false
+        b.renamingFolder = nil
         if let window = mainWindow {
             if defaultFrame == nil { defaultFrame = window.frame }
             if let frame = defaultFrame, window.frame != frame { window.setFrame(frame, display: true) }
