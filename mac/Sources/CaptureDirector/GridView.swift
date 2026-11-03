@@ -3,22 +3,36 @@ import CaptureDirectorKit
 import SwiftUI
 
 /// Captures as 16:9 cards that fill the width. Every card drags out as the real video file.
+/// Once a card is clicked the grid takes the arrow keys and ⌘A, like Finder's icon view.
 struct GridView: View {
     @Environment(AppModel.self) private var model
     let entries: [LibraryEntry]
+    @FocusState private var focused: Bool
+    /// The width the cards share, for the arrow keys' column count.
+    @State private var width: CGFloat = 0
 
-    private let columns = [GridItem(.adaptive(minimum: 208, maximum: 320), spacing: Space.lg, alignment: .top)]
+    private static let cardWidth: CGFloat = 208
+    private let columns = [GridItem(.adaptive(minimum: GridView.cardWidth, maximum: 320), spacing: Space.lg, alignment: .top)]
+
+    private var columnCount: Int {
+        GridMove.columns(width: Double(width - 2 * Space.margin), minimum: Double(Self.cardWidth), spacing: Double(Space.lg))
+    }
 
     var body: some View {
         let browser = model.browser
         let order = entries.map(\.id)
-        ScrollView {
-            LazyVGrid(columns: columns, alignment: .leading, spacing: Space.xl) {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    let carried = DragSet.entries(dragging: entry, selection: browser.selection, in: entries)
-                    CaptureCard(entry: entry, selected: browser.selection.contains(entry.id), carried: carried)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: Space.xl) {
+                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                        let carried = DragSet.entries(dragging: entry, selection: browser.selection, in: entries)
+                        CaptureCard(entry: entry, selected: browser.selection.contains(entry.id), carried: carried) { modifiers in
+                            browser.click(entry.id, in: order, modifiers: modifiers)
+                            focused = true
+                        }
                         .onTapGesture {
                             browser.click(entry.id, in: order, modifiers: NSEvent.modifierFlags)
+                            focused = true
                         }
                         // Alongside the click, so a single click still selects at once.
                         .simultaneousGesture(TapGesture(count: 2).onEnded {
@@ -26,17 +40,60 @@ struct GridView: View {
                         })
                         .contextMenu { CaptureMenuItems(entries: carried) }
                         .modifier(FirstCardProbe(first: index == 0))
+                    }
                 }
+                .padding(Space.margin)
+                .gridArea("grid")
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Captures")
             }
-            .padding(Space.margin)
-            .gridArea("grid")
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            // A click between cards clears the selection, like Finder.
+            .background {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { browser.selection = []; focused = true }
+            }
+            // The cards show the selection; a ring around the whole page would only add noise.
+            // It takes keys, not clicks: Space and Return stay with the menu bar.
+            .focusable(interactions: .edit)
+            .focusEffectDisabled()
+            .focused($focused)
+            .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow, .home, .end]) { press in
+                guard let direction = press.key.gridDirection else { return .ignored }
+                let modifiers = press.modifiers.flags
+                return browser.move(direction, in: order, columns: columnCount, modifiers: modifiers) ? .handled : .ignored
+            }
+            // Edit > Select All (⌘A) lands here while the grid has the keys.
+            .onCommand(#selector(NSResponder.selectAll(_:))) { browser.selectAll(order) }
+            .onChange(of: browser.cursor) { _, id in
+                guard let id, focused else { return }
+                withAnimation(Motion.hover) { proxy.scrollTo(id) }
+            }
         }
-        // A click between cards clears the selection, like Finder.
-        .background {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { browser.selection = [] }
+    }
+}
+
+private extension KeyEquivalent {
+    var gridDirection: GridMove.Direction? {
+        switch self {
+        case .leftArrow: .left
+        case .rightArrow: .right
+        case .upArrow: .up
+        case .downArrow: .down
+        case .home: .home
+        case .end: .end
+        default: nil
         }
+    }
+}
+
+private extension EventModifiers {
+    var flags: NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if contains(.shift) { flags.insert(.shift) }
+        if contains(.command) { flags.insert(.command) }
+        return flags
     }
 }
 
@@ -55,6 +112,8 @@ struct CaptureCard: View {
     let selected: Bool
     /// What a drag from this card carries: the selection when the card is in it, else just the card.
     let carried: [LibraryEntry]
+    /// Selects the card, as a click with these modifiers would. VoiceOver's actions use it.
+    let select: (NSEvent.ModifierFlags) -> Void
     @State private var hovering = false
     @State private var poster: CGImage?
     /// The frame under the pointer while scrubbing; nil shows the poster.
@@ -101,8 +160,30 @@ struct CaptureCard: View {
         .fileDrag(carried.filter { !model.store.missing.contains($0.id) })
         .onHover { on in withAnimation(Motion.hover) { hovering = on } }
         .help(entry.title)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(entry.title)
+        .accessibilityValue(spoken)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAction { select([]) }
+        .accessibilityAction(named: selected ? "Remove from selection" : "Add to selection") { select(.command) }
+        .accessibilityAction(named: "Select up to here") { select(.shift) }
+        .accessibilityActions {
+            if !moved {
+                Button("Play") { model.play(entry) }
+            } else {
+                Button("Locate\u{2026}") { model.locate(entry) }
+                Button("Remove from library") { model.browser.confirmingRemove = [entry] }
+            }
+        }
+    }
+
+    /// What VoiceOver reads after the title: "Final video, 1:24, starred, Nov 3 · spacefast.com".
+    private var spoken: String {
+        var parts = [entry.isFinal ? "Final video" : "Clip"]
+        if let d = entry.duration { parts.append(Format.length(d)) }
+        if entry.starred { parts.append("starred") }
+        parts.append(moved ? "file moved" : entry.byline)
+        return parts.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
     private var background: Color {
