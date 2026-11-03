@@ -100,6 +100,11 @@ enum Motion {
     static let hover = Animation.easeOut(duration: 0.12)
 }
 
+/// How long typing pauses before a field saves itself.
+enum Pause {
+    static let notes: Duration = .milliseconds(600)
+}
+
 extension View {
     /// Applies the chosen accent to everything below. Put it on every scene's root.
     func themed() -> some View {

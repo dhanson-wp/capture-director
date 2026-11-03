@@ -8,7 +8,7 @@ import SwiftUI
 /// writes <page>-light.png and <page>-dark.png for every page in `pages`, and
 /// settings-<tab>-light.png and settings-<tab>-dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
-/// APP_SNAPSHOT_PAGES=all-grid,starred limits the pages. Add "settings" to include Settings.
+/// APP_SNAPSHOT_PAGES=all-grid,starred limits the pages (inspector, inspector-multi, and inspector-tall show the inspector). Add "settings" to include Settings.
 /// Add APP_ACCENT=<id> to see the pages in another accent.
 enum Snapshot {
     /// One state of the main window: a name and how to get there from a fresh browser.
@@ -23,12 +23,36 @@ enum Snapshot {
         Page(name: "folder") { $0.browser.item = .folder("blog/Post formats") },
         Page(name: "starred") { $0.browser.item = .starred },
         Page(name: "empty") { $0.store.library = Library() },
+        // A clip with a source site and a shot list, so every section shows.
         Page(name: "inspector") { model in
-            let first = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now).first
-            model.browser.selection = Set([first?.id].compactMap { $0 })
+            let entries = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now)
+            let pick = entries.first { $0.title == "Gallery scroll" } ?? entries.first
+            model.browser.selection = Set([pick?.id].compactMap { $0 })
             model.browser.showInspector = true
         },
+        Page(name: "inspector-multi") { model in
+            let entries = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now)
+            model.browser.selection = Set(entries.prefix(3).map(\.id))
+            model.browser.showInspector = true
+        },
+        // The same clip in a window as tall as the screen, so the inspector's lower sections show.
+        Page(name: "inspector-tall") { model in
+            let entries = Browse.apply(model.store.library.entries, item: .all, search: "", sort: .newest, now: .now)
+            let pick = entries.first { $0.title == "Gallery scroll" } ?? entries.first
+            model.browser.selection = Set([pick?.id].compactMap { $0 })
+            model.browser.showInspector = true
+            if let window = mainWindow, let screen = window.screen ?? NSScreen.main {
+                var frame = window.frame
+                frame.size.height = screen.visibleFrame.height
+                frame.origin.y = screen.visibleFrame.minY
+                window.setFrame(frame, display: true)
+            }
+        },
     ]
+
+    /// The main window's frame before any page changed it.
+    private static var defaultFrame: NSRect?
+    private static var mainWindow: NSWindow? { NSApp.windows.first { $0.canBecomeMain && !$0.isSheet } }
 
     /// Back to All captures in the grid with nothing selected, and the real library.
     private static func reset(_ model: AppModel, library: Library) {
@@ -39,6 +63,10 @@ enum Snapshot {
         b.sort = .newest
         b.selection = []
         b.showInspector = false
+        if let window = mainWindow {
+            if defaultFrame == nil { defaultFrame = window.frame }
+            if let frame = defaultFrame, window.frame != frame { window.setFrame(frame, display: true) }
+        }
         model.store.library = library
     }
 

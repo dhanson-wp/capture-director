@@ -55,3 +55,8 @@ func makeEntry(_ id: String = "0123456789abcdef", title: String = "T", project: 
     #expect(Format.size(999) == "999 B")
     #expect(Format.size(1_500) == "1.5 KB")
 }
+
+@Test func folderPathsListParentsBeforeChildrenInSidebarOrder() {
+    let lib = Library(entries: [], folders: ["Spacefast", "blog/Post formats", "Archive"])
+    #expect(FolderTree.paths(lib) == ["Archive", "blog", "blog/Post formats", "Spacefast"])
+}

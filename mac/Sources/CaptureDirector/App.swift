@@ -64,9 +64,32 @@ struct BrowserCommands: Commands {
         }
         CommandGroup(after: .pasteboard) {
             Divider()
-            Button("Remove from library") { browser.removeSelected?() }
+            Button("Remove from library…") { browser.removeSelected?() }
                 .keyboardShortcut(.delete, modifiers: .command)
                 .disabled(!menu.canRemove)
+        }
+        CommandMenu("Capture") {
+            Button(menu.allStarred ? "Unstar" : "Star") { model.toggleStar(model.selectedEntries()) }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+                .disabled(!menu.hasSelection)
+            Menu("Move to folder") {
+                Button("Unsorted") { model.move(model.selectedEntries(), to: "") }
+                if !menu.folders.isEmpty { Divider() }
+                ForEach(menu.folders, id: \.self) { path in
+                    Button(path) { model.move(model.selectedEntries(), to: path) }
+                }
+            }
+            .disabled(!menu.hasSelection)
+            Divider()
+            Button("Copy video") { model.copyVideos(model.selectedEntries()) }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+                .disabled(!menu.hasSelection)
+            Button("Copy for agent") { model.copyForAgent(model.selectedEntries()) }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(!menu.hasSelection)
+            Button("Show in Finder") { model.showInFinder(model.selectedEntries()) }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(!menu.hasSelection)
         }
         CommandGroup(after: .textEditing) {
             Button("Search captures") { browser.focusSearch = true }

@@ -12,6 +12,12 @@ struct ListView: View {
     var body: some View {
         @Bindable var browser = model.browser
         let rows = columnSort.isEmpty ? entries : entries.sorted(using: columnSort)
+        // With several rows selected, a selected row's cells start one drag of them all.
+        let selected = rows.filter { browser.selection.contains($0.id) }
+        let multi = selected.count > 1 ? selected : nil
+        let cell = { (entry: LibraryEntry) -> [LibraryEntry]? in
+            browser.selection.contains(entry.id) ? multi : nil
+        }
         Table(of: LibraryEntry.self, selection: $browser.selection, sortOrder: $columnSort) {
             TableColumn("Title", value: \.title) { entry in
                 HStack(spacing: Space.sm) {
@@ -24,31 +30,37 @@ struct ListView: View {
                             .accessibilityLabel("Starred")
                     }
                 }
+                .rowDrag(cell(entry))
             }
             .width(min: 160, ideal: 220)
             TableColumn("Project", value: \.projectName) { entry in
                 Text(entry.projectName).lineLimit(1).help(entry.projectName)
+                    .rowDrag(cell(entry))
             }
             .width(min: 100, ideal: 140)
             TableColumn("Kind", value: \.kindName) { entry in
                 KindBadge(isFinal: entry.isFinal)
+                    .rowDrag(cell(entry))
             }
             .width(min: 52, ideal: 60, max: 72)
             TableColumn("Length", value: \.lengthValue) { entry in
                 Text(entry.duration.map(Format.length) ?? "")
                     .monospacedDigit()
                     .frame(maxWidth: .infinity, alignment: .trailing)
+                    .rowDrag(cell(entry))
             }
             .width(min: 52, ideal: 60, max: 80)
             TableColumn("Date", value: \.dateValue) { entry in
                 Text((entry.updated ?? entry.added).map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "")
                     .monospacedDigit()
+                    .rowDrag(cell(entry))
             }
             .width(min: 88, ideal: 104)
             TableColumn("Size", value: \.sizeValue) { entry in
                 Text(entry.size.map(Format.size) ?? "")
                     .monospacedDigit()
                     .frame(maxWidth: .infinity, alignment: .trailing)
+                    .rowDrag(cell(entry))
             }
             .width(min: 60, ideal: 72, max: 96)
             TableColumn("Location", value: \.location) { entry in
@@ -57,24 +69,38 @@ struct ListView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(entry.file)
+                    .rowDrag(cell(entry))
             }
             .width(min: 120, ideal: 240)
         } rows: {
             ForEach(rows) { entry in
-                TableRow(entry)
-                    .draggable(entry.fileURL)
+                // SwiftUI's row drag carries one file; several selected rows drag from their cells instead.
+                if cell(entry) == nil {
+                    TableRow(entry)
+                        .draggable(entry.fileURL)
+                } else {
+                    TableRow(entry)
+                }
             }
         }
         .contextMenu(forSelectionType: LibraryEntry.ID.self) { ids in
-            let urls = rows.filter { ids.contains($0.id) }.map(\.fileURL)
-            if !urls.isEmpty {
-                Button("Copy video") { FileDrag.copy(urls) }
-            }
+            let picked = rows.filter { ids.contains($0.id) }
+            if !picked.isEmpty { CaptureMenuItems(entries: picked) }
         } primaryAction: { ids in
             // Double-click, or Return, on a row.
             if ids.count == 1, let entry = rows.first(where: { ids.contains($0.id) }) { model.play(entry) }
         }
         .onChange(of: browser.sort) { columnSort = [] }
+    }
+}
+
+private extension View {
+    /// A cell of a selected row while several are selected: the whole cell drags them all.
+    /// The gesture stays attached and switches off, so the cell keeps its state.
+    func rowDrag(_ entries: [LibraryEntry]?) -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .modifier(MultiFileDrag(entries: entries ?? [], enabled: entries != nil))
     }
 }
 

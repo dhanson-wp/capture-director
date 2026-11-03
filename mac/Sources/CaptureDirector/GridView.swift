@@ -15,16 +15,14 @@ struct GridView: View {
         ScrollView {
             LazyVGrid(columns: columns, alignment: .leading, spacing: Space.xl) {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    CaptureCard(entry: entry, selected: browser.selection.contains(entry.id))
+                    let carried = DragSet.entries(dragging: entry, selection: browser.selection, in: entries)
+                    CaptureCard(entry: entry, selected: browser.selection.contains(entry.id), carried: carried)
                         .onTapGesture {
                             browser.click(entry.id, in: order, modifiers: NSEvent.modifierFlags)
                         }
                         // Alongside the click, so a single click still selects at once.
                         .simultaneousGesture(TapGesture(count: 2).onEnded { model.play(entry) })
-                        .draggable(entry.fileURL)
-                        .contextMenu {
-                            Button("Copy video") { FileDrag.copy([entry.fileURL]) }
-                        }
+                        .contextMenu { CaptureMenuItems(entries: carried) }
                         .modifier(FirstCardProbe(first: index == 0))
                 }
             }
@@ -53,6 +51,8 @@ struct CaptureCard: View {
     @Environment(AppModel.self) private var model
     let entry: LibraryEntry
     let selected: Bool
+    /// What a drag from this card carries: the selection when the card is in it, else just the card.
+    let carried: [LibraryEntry]
     @State private var hovering = false
     @State private var poster: CGImage?
     /// The frame under the pointer while scrubbing; nil shows the poster.
@@ -89,6 +89,8 @@ struct CaptureCard: View {
         .padding(Space.xs)
         .background(background, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        // Inside the card, so its own state survives switching between one file and several.
+        .fileDrag(carried)
         .onHover { on in withAnimation(Motion.hover) { hovering = on } }
         .help(entry.title)
         .accessibilityElement(children: .combine)
@@ -165,6 +167,22 @@ struct CaptureCard: View {
                 }
             }
             .clipShape(frameShape)
+    }
+}
+
+/// The right-click menu for a card or a row: acts on what a drag from it would carry.
+struct CaptureMenuItems: View {
+    @Environment(AppModel.self) private var model
+    let entries: [LibraryEntry]
+
+    var body: some View {
+        Button("Copy video") { model.copyVideos(entries) }
+        Button("Copy for agent") { model.copyForAgent(entries) }
+        Button("Show in Finder") { model.showInFinder(entries) }
+        Divider()
+        Button(Bulk.starTarget(entries) ? "Star" : "Unstar") { model.toggleStar(entries) }
+        Divider()
+        Button("Remove from library…") { model.browser.confirmingRemove = entries }
     }
 }
 

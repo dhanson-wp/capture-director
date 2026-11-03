@@ -1,3 +1,4 @@
+import AppKit
 import CaptureDirectorKit
 import Foundation
 import Observation
@@ -26,13 +27,52 @@ final class AppModel {
         thumbnails = ThumbnailCache(home: file.deletingLastPathComponent())
     }
 
-    /// The selected captures' videos in the order on screen, leaving out
-    /// files that are gone. Quick Look shows these.
-    func selectedURLs() -> [URL] {
+    /// The selected captures in the order on screen.
+    func selectedEntries() -> [LibraryEntry] {
         let b = browser
         return Browse.apply(store.library.entries, item: b.item, search: b.search, sort: b.sort, now: .now)
-            .filter { b.selection.contains($0.id) && FileManager.default.fileExists(atPath: $0.file) }
-            .map(\.fileURL)
+            .filter { b.selection.contains($0.id) }
+    }
+
+    /// The selected captures' videos in the order on screen, leaving out
+    /// files that are gone. Quick Look, Copy video, and Show in Finder use these.
+    func selectedURLs() -> [URL] {
+        selectedEntries().filter(\.fileExists).map(\.fileURL)
+    }
+
+    // Actions on the selection, shared by the inspector and the Capture menu.
+
+    func copyVideos(_ entries: [LibraryEntry]) {
+        let urls = entries.filter(\.fileExists).map(\.fileURL)
+        if !urls.isEmpty { FileDrag.copy(urls) }
+    }
+
+    func copyForAgent(_ entries: [LibraryEntry]) {
+        guard !entries.isEmpty else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(AgentBlock.text(for: entries), forType: .string)
+    }
+
+    func showInFinder(_ entries: [LibraryEntry]) {
+        let urls = entries.filter(\.fileExists).map(\.fileURL)
+        if !urls.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(urls) }
+    }
+
+    /// Stars them all, or unstars them when every one is starred already.
+    func toggleStar(_ entries: [LibraryEntry]) {
+        let on = Bulk.starTarget(entries)
+        Task { await store.setStarred(entries.map(\.id), on) }
+    }
+
+    /// "" is Unsorted.
+    func move(_ entries: [LibraryEntry], to path: String) {
+        Task { await store.setProject(entries.map(\.id), path) }
+    }
+
+    /// Forgets the captures. The video files stay where they are.
+    func remove(_ entries: [LibraryEntry]) async {
+        await store.forget(entries.map(\.id))
     }
 
     /// Plays a capture in the player sheet. A video that's gone says so instead.
@@ -47,4 +87,9 @@ final class AppModel {
     func toggleQuickLook() {
         QuickLook.shared.toggle { [weak self] in self?.selectedURLs() ?? [] }
     }
+}
+
+extension LibraryEntry {
+    /// The video is still at its path. Drag, Share, and Copy need it.
+    var fileExists: Bool { FileManager.default.fileExists(atPath: file) }
 }

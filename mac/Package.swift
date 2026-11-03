@@ -11,7 +11,10 @@ let package = Package(
             name: "CaptureDirector",
             dependencies: ["CaptureDirectorKit"],
             // App code runs on the main thread unless you say otherwise.
-            swiftSettings: [.defaultIsolation(MainActor.self)]
+            swiftSettings: [.defaultIsolation(MainActor.self)],
+            // `import AVKit` links only _AVKit_SwiftUI with Command Line Tools, and
+            // VideoPlayer then crashes looking up AVPlayerView. Link AVKit itself.
+            linkerSettings: [.linkedFramework("AVKit")]
         ),
         .testTarget(name: "CaptureDirectorKitTests", dependencies: ["CaptureDirectorKit"]),
     ]

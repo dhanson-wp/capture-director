@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Fills a scratch library home with six short test videos, for snapshots and the self-test.
 # Usage: tools/fixture.sh <home>      (a folder in /tmp; never ~/.capture-director)
-#   blog/Post formats: Post formats tour (final, starred), Gallery scroll (clip), Quote block (clip, file deleted)
+#   blog/Post formats: Post formats tour (final, starred), Gallery scroll (clip, with a shot list), Quote block (clip, file deleted)
 #   Spacefast:         Spacefast launch (final), Publish flow (clip, older than 7 days)
 #   Unsorted:          Pricing toggle (clip)
 set -euo pipefail
@@ -56,7 +56,7 @@ set_ "$pricing" --title "Pricing toggle"
 node -e '
   const fs = require("fs");
   const file = process.argv[1] + "/library.json";
-  const [tour, launch, publish, pricing, quote] = process.argv.slice(2);
+  const [tour, launch, publish, pricing, quote, gallery] = process.argv.slice(2);
   const db = JSON.parse(fs.readFileSync(file, "utf8"));
   const urls = { [tour]: "https://www.derekhanson.blog/post-formats/", [launch]: "https://spacefast.com/",
                  [publish]: "https://spacefast.com/docs/publish", [pricing]: "https://spacefast.com/pricing",
@@ -65,10 +65,12 @@ node -e '
   for (const e of db.entries) {
     if (urls[e.id]) e.url = urls[e.id];
     if (e.id === publish) { e.added = old; e.updated = old; }
+    // A shot list path with a space, so Record again shows its quoting.
+    if (e.id === gallery) { e.source = process.argv[1] + "/shot lists/blog.yaml"; e.shot = "gallery-scroll"; }
   }
   // library add first files each video under its folder name; keep only the real folders.
   db.folders = ["Spacefast", "blog", "blog/Post formats"];
-  fs.writeFileSync(file, JSON.stringify(db, null, 2));' "$home" "$tour" "$launch" "$publish" "$pricing" "$quote"
+  fs.writeFileSync(file, JSON.stringify(db, null, 2));' "$home" "$tour" "$launch" "$publish" "$pricing" "$quote" "$gallery"
 
 rm "$videos/blog/quote-block/quote-block.mp4"
 echo "fixture: 6 captures in $home"

@@ -63,4 +63,10 @@ public enum FolderTree {
         }
         return nodes(under: nil)
     }
+
+    /// Every folder path, parents before children, in sidebar order. The project pickers list these.
+    public static func paths(_ library: Library) -> [String] {
+        func walk(_ nodes: [FolderNode]) -> [String] { nodes.flatMap { [$0.path] + walk($0.children) } }
+        return walk(build(library))
+    }
 }

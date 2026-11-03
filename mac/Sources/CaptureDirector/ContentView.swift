@@ -17,6 +17,9 @@ enum Layout: String, CaseIterable, Identifiable {
 final class Browser {
     var selection: Set<LibraryEntry.ID> = [] {
         didSet {
+            // A selection made another way (the list, a reload) moves the ⇧-click anchor too.
+            if selection.count == 1 { anchor = selection.first }
+            else if let a = anchor, !selection.contains(a) { anchor = nil }
             MenuState.shared.update(self)
             QuickLook.shared.selectionChanged()
         }
@@ -27,20 +30,31 @@ final class Browser {
     var editingText = false { didSet { MenuState.shared.update(self) } }
     /// Bare-key shortcuts (Space, Quick Look) are free: no text field is
     /// focused and no sheet is open. Anything that takes keys sets one of these.
-    var keysFree: Bool { !searchFocused && !editingText && player == nil }
+    var keysFree: Bool { !searchFocused && !editingText && player == nil && confirmingRemove == nil }
     var item: SidebarItem = .all
     var search = ""
     var sort: CaptureDirectorKit.SortOrder = .newest { didSet { MenuState.shared.update(self) } }
-    var layout: Layout = .grid { didSet { MenuState.shared.update(self) } }
+    var layout: Layout = .grid {
+        didSet {
+            // The list keeps its own order; a range from the grid's anchor would be wrong there.
+            if layout != oldValue { anchor = nil }
+            MenuState.shared.update(self)
+        }
+    }
     var showInspector = false
     /// Set by ⌘F; ContentView moves focus into the search field and clears it.
     var focusSearch = false
     var searchFocused = false { didSet { MenuState.shared.update(self) } }
     /// The last plain or ⌘-clicked capture, where a ⇧-click range starts.
     var anchor: LibraryEntry.ID?
+    /// Starred captures and folder paths, kept by ContentView for the Capture menu.
+    var starredIDs: Set<LibraryEntry.ID> = [] { didSet { MenuState.shared.update(self) } }
+    var folderPaths: [String] = [] { didSet { MenuState.shared.update(self) } }
 
-    /// Remove from library (⌘⌫). Task 9 sets it; until then the menu item is off.
+    /// Remove from library (⌘⌫). ContentView sets it to ask first.
     var removeSelected: (() -> Void)? { didSet { MenuState.shared.update(self) } }
+    /// The captures the Remove confirmation is asking about; nil when it isn't showing.
+    var confirmingRemove: [LibraryEntry]? { didSet { MenuState.shared.update(self) } }
     /// New folder (⇧⌘N). Task 11 sets it; until then the menu item is off.
     var newFolder: (() -> Void)? { didSet { MenuState.shared.update(self) } }
 
@@ -72,6 +86,11 @@ final class MenuState: ObservableObject {
     @Published private(set) var canAddFolder = false
     @Published private(set) var canQuickLook = false
     @Published private(set) var canPlay = false
+    /// Something is selected: the Capture menu's items apply.
+    @Published private(set) var hasSelection = false
+    /// Every selected capture is starred, so Star reads Unstar.
+    @Published private(set) var allStarred = false
+    @Published private(set) var folders: [String] = []
 
     func update(_ b: Browser) {
         if layout != b.layout { layout = b.layout }
@@ -85,6 +104,10 @@ final class MenuState: ObservableObject {
         if canQuickLook != look { canQuickLook = look }
         let play = b.selection.count == 1 && b.keysFree
         if canPlay != play { canPlay = play }
+        if hasSelection != !b.selection.isEmpty { hasSelection = !b.selection.isEmpty }
+        let starred = !b.selection.isEmpty && b.selection.isSubset(of: b.starredIDs)
+        if allStarred != starred { allStarred = starred }
+        if folders != b.folderPaths { folders = b.folderPaths }
     }
 }
 
@@ -152,7 +175,7 @@ struct ContentView: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) { skippedNote }
         }
         .inspector(isPresented: $browser.showInspector) {
-            InspectorContent()
+            Inspector()
                 .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
                 .toolbar {
                     ToolbarSpacer(.flexible)
@@ -173,9 +196,33 @@ struct ContentView: View {
             let keep = browser.selection.intersection(ids)
             if keep != browser.selection { browser.selection = keep }
         }
-        .onChange(of: store.library) { now = Date() }
+        .onChange(of: store.library, initial: true) {
+            now = Date()
+            browser.starredIDs = Set(store.library.entries.filter(\.starred).map(\.id))
+            browser.folderPaths = FolderTree.paths(store.library)
+        }
         .sheet(item: $browser.player) { entry in
             PlayerSheet(entry: entry)
+        }
+        .confirmationDialog(removeTitle(browser.confirmingRemove ?? []),
+                            isPresented: Binding(get: { browser.confirmingRemove != nil },
+                                                 set: { if !$0 { browser.confirmingRemove = nil } }),
+                            presenting: browser.confirmingRemove) { entries in
+            Button("Remove from library", role: .destructive) {
+                Task { await model.remove(entries) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { entries in
+            Text(entries.count == 1
+                 ? "The video file stays where it is. You can add it back with capture-director library add."
+                 : "The video files stay where they are. You can add them back with capture-director library add.")
+        }
+        .onAppear {
+            browser.removeSelected = { [weak model] in
+                guard let model else { return }
+                let entries = model.selectedEntries()
+                if !entries.isEmpty { model.browser.confirmingRemove = entries }
+            }
         }
         .noInitialFocus()
         .task {
@@ -217,6 +264,11 @@ struct ContentView: View {
             case .list: ListView(entries: entries)
             }
         }
+    }
+
+    private func removeTitle(_ entries: [LibraryEntry]) -> String {
+        entries.count == 1 ? "Remove \u{201C}\(entries[0].title)\u{201D} from the library?"
+                           : "Remove \(entries.count) captures from the library?"
     }
 
     private func emptyTitle(_ item: SidebarItem) -> String {
@@ -318,35 +370,5 @@ private struct Banner: View {
         .padding(.vertical, Space.sm)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(.separator))
-    }
-}
-
-/// Reads the selection itself, so a click redraws the inspector and not the window.
-/// Stands in until Task 9 builds the real one.
-private struct InspectorContent: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        let selection = model.browser.selection
-        let entries = model.store.library.entries.filter { selection.contains($0.id) }
-        if entries.count == 1, let entry = entries.first {
-            Form {
-                Section {
-                    LabeledContent("Kind", value: entry.isFinal ? "Final video" : "Clip")
-                    if let d = entry.duration { LabeledContent("Length", value: Format.length(d)) }
-                    if let w = entry.width, let h = entry.height { LabeledContent("Resolution", value: "\(w) × \(h)") }
-                    if let s = entry.size { LabeledContent("Size", value: Format.size(s)) }
-                } header: {
-                    Text(entry.title).font(.headline)
-                }
-            }
-            .formStyle(.grouped)
-        } else if entries.count > 1 {
-            ContentUnavailableView("\(entries.count) captures", systemImage: "square.stack",
-                                   description: Text("Selected together."))
-        } else {
-            ContentUnavailableView("No selection", systemImage: "sidebar.trailing",
-                                   description: Text("Select a capture to see its details."))
-        }
     }
 }

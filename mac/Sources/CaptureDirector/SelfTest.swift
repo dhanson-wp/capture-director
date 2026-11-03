@@ -22,6 +22,7 @@ enum SelfTest {
             check("titles are cleaned", ItemTitle.clean("  Buy   milk ") == "Buy milk")
             await browsing(model)
             await thumbnails(model)
+            await inspector(model)
 
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
@@ -143,6 +144,99 @@ enum SelfTest {
         check("Quick Look and play are off while a text field is being edited", !menu.canQuickLook && !menu.canPlay)
         b.editingText = false
         b.selection = []
+    }
+
+    /// The inspector, the Capture menu, Remove, the drag set, and real writes through the CLI.
+    private static func inspector(_ model: AppModel) async {
+        let b = model.browser
+        let store = model.store
+        let menu = MenuState.shared
+        let entries = Browse.apply(store.library.entries, item: .all, search: "", sort: .newest, now: .now)
+        guard entries.count >= 3, let gallery = entries.first(where: { $0.title == "Gallery scroll" }) else {
+            check("the inspector fixtures are there", false)
+            return
+        }
+
+        b.selection = [gallery.id]
+        check("one selected capture shows its details", InspectorMode.of(model.selectedEntries()) == .one(gallery))
+        b.selection = Set(entries.prefix(3).map(\.id))
+        check("three selected show as several, in screen order",
+              InspectorMode.of(model.selectedEntries()) == .several(Array(entries.prefix(3))))
+        b.selection = []
+        check("nothing selected shows nothing", InspectorMode.of(model.selectedEntries()) == .none)
+
+        // Remove from library: on with a selection, asks first, and steps aside while typing.
+        b.selection = [gallery.id]
+        check("Remove from library is on with a selection", b.removeSelected != nil && menu.canRemove)
+        b.editingText = true
+        check("Remove from library is off while a text field is being edited", !menu.canRemove)
+        b.editingText = false
+        b.removeSelected?()
+        check("Remove from library asks first, about the selection", b.confirmingRemove == [gallery])
+        check("Space and Command-Delete are off while it asks", !menu.canRemove && !menu.canQuickLook)
+        b.confirmingRemove = nil
+        check("the menus have Copy video, Copy for agent, Show in Finder, and Star",
+              menu.hasSelection && ["Copy video", "Copy for agent", "Show in Finder", "Star"].allSatisfy { title in
+                  menuItems(NSApp.mainMenu).contains { $0.title == title }
+              })
+
+        // The drag set: the selection when the dragged capture is in it, else just that capture.
+        let three = Array(entries.prefix(3))
+        b.selection = Set(three.map(\.id))
+        check("dragging a selected capture carries all three",
+              DragSet.entries(dragging: three[1], selection: b.selection, in: entries) == three)
+        let other = entries[3]
+        check("dragging an unselected capture carries only it",
+              DragSet.entries(dragging: other, selection: b.selection, in: entries) == [other])
+        let existing = three.filter(\.fileExists)
+        let items = FileDrag.dragItems(existing)
+        check("a several-file drag has one item per video, each a file URL",
+              items.count == existing.count && zip(items, existing).allSatisfy { ($0.item as? NSURL) as URL? == $1.fileURL },
+              "\(items.count) items for \(existing.count) files")
+
+        // The ⇧-click anchor follows a selection made in the list and resets on a layout switch.
+        b.selection = [gallery.id]
+        check("a single selection from anywhere becomes the anchor", b.anchor == gallery.id)
+        b.layout = .list
+        check("switching layout clears the anchor", b.anchor == nil)
+        b.layout = .grid
+
+        check("Record again quotes a shot list path with spaces",
+              gallery.recordAgainCommand?.contains("'") == true && gallery.recordAgainCommand?.hasSuffix("--only gallery-scroll") == true,
+              gallery.recordAgainCommand ?? "nil")
+
+        // Real writes through the CLI on the scratch library.
+        guard store.canWrite else {
+            print("SKIP store writes: this build has no config.json, so it can't run the CLI")
+            b.selection = []
+            return
+        }
+        func current(_ id: String) -> LibraryEntry? { store.library.entries.first { $0.id == id } }
+        await store.setStarred([gallery.id], true)
+        check("Star writes through the CLI and the library reloads", current(gallery.id)?.starred == true, store.problem ?? "")
+        await store.setStarred([gallery.id], false)
+        await store.setTitle(gallery.id, "Gallery scroll, take two")
+        check("a new title saves", current(gallery.id)?.title == "Gallery scroll, take two", store.problem ?? "")
+        await store.setNotes(gallery.id, "Use this one on the launch post.")
+        check("notes save", current(gallery.id)?.notes == "Use this one on the launch post.", store.problem ?? "")
+        let ids = three.map(\.id)
+        await store.setProject(ids, "Launch week")
+        check("Move to folder moves all three into a new folder",
+              ids.allSatisfy { current($0)?.folder == "Launch week" } && FolderTree.paths(store.library).contains("Launch week"),
+              store.problem ?? "")
+        let before = store.library.entries.count
+        let gone = entries.last!
+        let had = gone.fileExists
+        await model.remove([gone])
+        check("Remove from library forgets the capture and leaves its file alone",
+              store.library.entries.count == before - 1 && current(gone.id) == nil
+                  && FileManager.default.fileExists(atPath: gone.file) == had,
+              store.problem ?? "")
+        b.selection = []
+    }
+
+    private static func menuItems(_ menu: NSMenu?) -> [NSMenuItem] {
+        (menu?.items ?? []).flatMap { [$0] + menuItems($0.submenu) }
     }
 
     private static func check(_ name: String, _ ok: Bool, _ detail: String = "") {

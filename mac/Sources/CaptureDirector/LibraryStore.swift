@@ -22,6 +22,9 @@ final class LibraryStore {
     @ObservationIgnored private let cli: CLI?
     @ObservationIgnored private var watcher: LibraryWatcher?
 
+    /// The CLI is set up, so changes can be written.
+    var canWrite: Bool { cli != nil }
+
     init(file: URL, cli: CLI?) {
         self.file = file
         self.cli = cli
