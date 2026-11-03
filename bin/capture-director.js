@@ -3,6 +3,7 @@ import path from 'node:path';
 import { record, processAll } from '../src/shots.js';
 import { render, contactSheet, stills } from '../src/render.js';
 import { serve, importPath } from '../src/library.js';
+import { installApp } from '../src/install-app.js';
 
 const HELP = `capture-director: record polished website demo clips without a human at the wheel
 
@@ -15,6 +16,7 @@ Usage:
   capture-director stills <video.mp4> <t1,t2,...>       Full-size PNG stills at given seconds
   capture-director library [--port 7465] [--no-open]    Browse and organize everything you've made
   capture-director library add <folder or video>       Add videos made before the library existed
+  capture-director install-app [--dir ~/Applications]   Build and install the Mac app
 
 Every command prints a JSON summary on stdout. Progress goes to stderr.
 `;
@@ -60,6 +62,9 @@ async function main() {
 				const { url, port, library } = await serve({ port: f.port === undefined ? undefined : Number(f.port), open: !f['no-open'] });
 				result = { url, port, library };
 			}
+			break;
+		case 'install-app':
+			result = await installApp({ dir: typeof f.dir === 'string' ? path.resolve(f.dir) : undefined });
 			break;
 		default:
 			process.stdout.write(HELP);
