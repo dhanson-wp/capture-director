@@ -75,7 +75,7 @@ struct CaptureCard: View {
                     if entry.starred {
                         Image(systemName: "star.fill")
                             .font(.caption)
-                            .foregroundStyle(Palette.accentText)
+                            .foregroundStyle(Palette.star)
                             .accessibilityLabel("Starred")
                     }
                     Text(entry.title)

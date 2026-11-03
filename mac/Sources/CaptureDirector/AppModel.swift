@@ -4,12 +4,10 @@ import Foundation
 import Observation
 import UniformTypeIdentifiers
 
-/// What the windows share: the library store, what the main window is
-/// browsing, and which Settings tab is showing.
+/// What the windows share: the library store and what the main window is browsing.
 @MainActor
 @Observable
 final class AppModel {
-    var settingsTab: SettingsTab = .general
     let store: LibraryStore
     let browser = Browser()
     /// Poster and scrub frames, read from the same home as the library.

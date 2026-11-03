@@ -4,9 +4,8 @@ import SwiftUI
 
 // CaptureDirector
 //   CaptureDirector                      the app
-//   APP_SNAPSHOT=<dir> CaptureDirector   save a PNG of the main window and every Settings tab in light and dark mode, then quit
+//   APP_SNAPSHOT=<dir> CaptureDirector   save a PNG of every main window page in light and dark mode, then quit
 //   CaptureDirector --selftest           run the self-test on a scratch library and quit with 0 or 1 (tools/selftest.sh)
-//   APP_ACCENT=<id> CaptureDirector      run with another accent from Theme.all (UI/Theme.swift)
 //   APP_GRID=1 CaptureDirector           draw the 8 pt grid and the layout probes over the window
 
 @main
@@ -19,7 +18,6 @@ struct CaptureDirectorApp: App {
         Window("Capture Director", id: "main") {
             ContentView()
                 .environment(model)
-                .themed()
                 .overlay { if GridOverlay.enabled { GridOverlay() } }
                 .frame(minWidth: 760, minHeight: 480)
         }
@@ -31,13 +29,6 @@ struct CaptureDirectorApp: App {
             InspectorCommands()
             BrowserCommands(model: model, menu: menu)
         }
-
-        Settings {
-            SettingsView()
-                .environment(model)
-                .themed()
-        }
-        .windowResizability(.contentSize)
     }
 }
 

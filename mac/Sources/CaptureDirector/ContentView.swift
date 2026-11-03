@@ -177,7 +177,6 @@ extension CaptureDirectorKit.SortOrder {
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openSettings) private var openSettings
     @FocusState private var searchFocus: Bool
     /// "Now" for Recent and the sidebar counts. It changes when the library
     /// reloads and once a minute, never on a click, so selecting doesn't redo the browse.
@@ -266,7 +265,7 @@ struct ContentView: View {
         .task {
             store.start()
             SelfTest.runIfRequested(model: model)
-            Snapshot.runIfRequested(model: model, openSettings: openSettings)
+            Snapshot.runIfRequested(model: model)
         }
     }
 

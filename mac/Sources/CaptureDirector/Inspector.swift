@@ -397,7 +397,7 @@ private struct StarButton: View {
         Button(starred ? "Unstar" : "Star", systemImage: starred ? "star.fill" : "star", action: action)
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
-            .foregroundStyle(starred ? AnyShapeStyle(Palette.accentText) : AnyShapeStyle(.secondary))
+            .foregroundStyle(starred ? AnyShapeStyle(Palette.star) : AnyShapeStyle(.secondary))
             .help(starred ? "Unstar (Shift-Command-L)" : "Star (Shift-Command-L)")
     }
 }

@@ -17,22 +17,21 @@ A native macOS app in SwiftUI. It drives the capture-director CLI. Command Line 
 - Unit tests: `tools/test.sh` (adds the Command Line Tools flags Swift Testing needs).
 - Self-test (the app's real functions on a scratch library): `tools/selftest.sh` (runs the app in `/tmp/CaptureDirector-test-app`; set `CD_APP_DIR` to use another). Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots with sample data and look at them: `tools/snap.sh` (fills a scratch home with `tools/fixture.sh`; set `CD_APP_DIR` to snapshot an app installed elsewhere; it defaults to `/tmp/CaptureDirector-test-app`).
-  It writes `/tmp/CaptureDirector-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all-grid,settings tools/snap.sh` limits the pages (all-grid, all-list, folder, starred, empty, inspector, settings).
-  For a panel, sheet, or popover, add a capture to `Snapshot.swift` like the Settings loop.
+  It writes `/tmp/CaptureDirector-shots/<page>-light.png` and `-dark.png` for every page in `Snapshot.pages`, then quits. `APP_SNAPSHOT_PAGES=all-grid,inspector tools/snap.sh` limits the pages (all-grid, all-list, folder, starred, empty, inspector, inspector-moved, and the rest in `Snapshot.swift`).
+  For a panel, sheet, or popover, add a page to `Snapshot.pages`.
 - Snapshots and the self-test run with `CD_HOME` pointing at a folder in /tmp. The app only reads `library.json`; never point tests at `~/.capture-director`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/CaptureDirector-shots/*-layout.json`. Both print PASS.
 - A change is done when the build has no errors, the grid checks pass, and you looked at the light and dark snapshots.
 
 ## Design rules
 
-- Use Apple's controls and system styles. Only the accent color is custom: mulberry, set in `UI/Theme.swift` (`ThemeStore.defaultID`), with brand tokens for the Final badge (`Palette.final`) and quiet highlights (`Palette.highlight`). There is no accent picker; light and dark mode follow the Mac.
-- Views use `.tint`, `Palette.accent`, `Palette.accentText` (accent-colored text), and `Palette.onAccent` (text on an accent fill). Never hard-code colors, radii, or durations in views.
-- Compare accents: add `APP_ACCENT=<id>` to the snapshot command.
+- Use Apple's controls and system styles, in the system accent color. There's no custom `.tint`: the app is built with Command Line Tools, which can't compile an asset-catalog accent, so AppKit draws the sidebar in the system accent and a custom tint would mix two accents in one window. A committed Xcode-built `Assets.car` with `NSAccentColorName` could bring mulberry back later. Light and dark mode follow the Mac.
+- Brand colors are fixed tokens in `UI/Theme.swift` for brand things only: `Palette.star` (mulberry), `Palette.final` with `Palette.onFinal` (citron, the Final badge), and `Palette.highlight` (pool, quiet highlights). `Palette.accent` is the system accent, for selection rings and drop targets. Never hard-code colors, radii, or durations in views.
 - Spacing comes from `Space` in `UI/Grid.swift`, on a 4 pt grid. Mark custom pages and cards with `.gridArea` and `.gridProbe`.
-- Windows open calm: `.noInitialFocus()` on every window and sheet (no focus ring or selected text on open), `.fitsContent()` on sheets and Settings tabs (no scroll bar with nothing to scroll). System scroll bars. Both in `UI/WindowBehavior.swift`.
-- Settings: one tab per topic in `SettingsView.swift`, one grouped Form per tab. Add a case to `SettingsTab` for a new tab.
+- Windows open calm: `.noInitialFocus()` on every window and sheet (no focus ring or selected text on open), `.fitsContent()` on sheets (no scroll bar with nothing to scroll). System scroll bars. Both in `UI/WindowBehavior.swift`.
+- There's no Settings window; nothing needs one yet. If a setting comes along, add a `Settings` scene with one grouped Form per tab.
 - Window chrome (title bar, toolbar, sidebar, menus, sheets) stays system. Buttons use system styles, like `.borderedProminent`.
-- Colors: `.primary`, `.secondary`, `.tint`, and system colors. Never fixed grays or white for text.
+- Colors: `.primary`, `.secondary`, `.tint` (the system accent), and system colors. Never fixed grays or white for text.
 - Every action has a menu bar item and a keyboard shortcut.
 - `Label` for icon and text pairs. SF Symbols for icons.
 - `ContentUnavailableView` for empty states.

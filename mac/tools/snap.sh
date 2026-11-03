@@ -1,8 +1,8 @@
 #!/bin/zsh
-# Snapshots of every main window page and Settings in light and dark, on the
+# Snapshots of every main window page in light and dark, on the
 # fixture library (tools/fixture.sh) in a scratch home.
-# Usage: tools/snap.sh            every page and Settings
-#        APP_SNAPSHOT_PAGES=all-grid,settings tools/snap.sh
+# Usage: tools/snap.sh            every page
+#        APP_SNAPSHOT_PAGES=all-grid,inspector tools/snap.sh
 # Environment: CD_APP_DIR   folder with Capture Director.app (default /tmp/CaptureDirector-test-app,
 #              made with: node bin/capture-director.js install-app --dir /tmp/CaptureDirector-test-app)
 set -u

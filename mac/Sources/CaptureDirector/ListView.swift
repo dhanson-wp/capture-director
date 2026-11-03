@@ -23,12 +23,7 @@ struct ListView: View {
                 HStack(spacing: Space.sm) {
                     RowPoster(entry: entry)
                     Text(entry.title).lineLimit(1).help(entry.title)
-                    if entry.starred {
-                        Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(Palette.accentText)
-                            .accessibilityLabel("Starred")
-                    }
+                    if entry.starred { RowStar() }
                 }
                 .rowDrag(cell(entry))
             }
@@ -69,6 +64,7 @@ struct ListView: View {
                         Text("File moved").foregroundStyle(.orange).lineLimit(1)
                         Button("Locate\u{2026}") { model.locate(entry) }
                             .controlSize(.small)
+                            .foregroundStyle(.primary)
                             .help("Choose where this video is now")
                     } else {
                         Text(entry.location)
@@ -159,5 +155,18 @@ private struct RowPoster: View {
                 let image = await model.thumbnails.image(for: entry, at: nil)
                 if !Task.isCancelled { poster = image }
             }
+    }
+}
+
+/// The star in a row. On a selected row's accent fill it takes the row's text color,
+/// since mulberry on the system accent wouldn't read.
+private struct RowStar: View {
+    @Environment(\.backgroundProminence) private var prominence
+
+    var body: some View {
+        Image(systemName: "star.fill")
+            .font(.caption)
+            .foregroundStyle(prominence == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(Palette.star))
+            .accessibilityLabel("Starred")
     }
 }

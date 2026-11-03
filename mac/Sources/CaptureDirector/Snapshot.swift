@@ -5,11 +5,9 @@ import SwiftUI
 
 /// Screenshot mode for agents.
 ///   CD_HOME=/tmp/cd-test APP_SNAPSHOT=/tmp/shots "$HOME/Applications/Capture Director.app/Contents/MacOS/CaptureDirector"
-/// writes <page>-light.png and <page>-dark.png for every page in `pages`, and
-/// settings-<tab>-light.png and settings-<tab>-dark.png for every Settings tab, then quits.
+/// writes <page>-light.png and <page>-dark.png for every page in `pages`, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
-/// APP_SNAPSHOT_PAGES=all-grid,starred limits the pages (folder-rename shows a folder name being edited; inspector, inspector-multi, and inspector-tall show the inspector). Add "settings" to include Settings.
-/// Add APP_ACCENT=<id> to see the pages in another accent.
+/// APP_SNAPSHOT_PAGES=all-grid,starred limits the pages (folder-rename shows a folder name being edited; inspector, inspector-multi, and inspector-tall show the inspector).
 enum Snapshot {
     /// One state of the main window: a name and how to get there from a fresh browser.
     struct Page {
@@ -105,7 +103,7 @@ enum Snapshot {
     /// APP_SNAPSHOT is set: this run takes snapshots and quits.
     static var requested: Bool { !(ProcessInfo.processInfo.environment["APP_SNAPSHOT"] ?? "").isEmpty }
 
-    static func runIfRequested(model: AppModel, openSettings: OpenSettingsAction) {
+    static func runIfRequested(model: AppModel) {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["APP_SNAPSHOT"], !dir.isEmpty else { return }
         let only = env["APP_SNAPSHOT_PAGES"].map { Set($0.split(separator: ",").map(String.init)) }
@@ -132,20 +130,6 @@ enum Snapshot {
                 }
             }
             await reset(model, library: library)
-            if only == nil || only?.contains("settings") == true {
-                let main = NSApp.windows.first { $0.canBecomeMain && !$0.isSheet }
-                openSettings()
-                try? await Task.sleep(for: .seconds(1))
-                for mode in ["light", "dark"] {
-                    NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
-                    for tab in SettingsTab.allCases {
-                        model.settingsTab = tab
-                        try? await Task.sleep(for: .seconds(0.8))
-                        let settings = NSApp.windows.first { $0.isVisible && $0 !== main && !$0.isSheet }
-                        capture(to: "\(dir)/settings-\(tab.rawValue)-\(mode).png", window: settings)
-                    }
-                }
-            }
             print("SNAPSHOT done \(dir)")
             // An open sheet refuses terminate, and the run would wait forever.
             for window in NSApp.windows { if let sheet = window.attachedSheet { window.endSheet(sheet) } }
