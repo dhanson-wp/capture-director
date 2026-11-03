@@ -25,8 +25,7 @@ public struct LibraryEntry: Codable, Identifiable, Hashable, Sendable {
     public var isFinal: Bool { kind == "video" }
     /// Library folder path; "" means Unsorted.
     public var folder: String {
-        let trimmed = (project ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed == "Unsorted" ? "" : trimmed
+        FolderPath.normalize(project ?? "")
     }
 
     private enum CodingKeys: String, CodingKey {
