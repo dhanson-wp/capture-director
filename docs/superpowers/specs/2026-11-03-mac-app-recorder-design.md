@@ -1,6 +1,6 @@
 # Recording Mac apps: design
 
-Status: draft for Derek's review, 2026-11-03
+Status: approved 2026-11-03; implemented on mac-app-recorder
 
 ## Why this exists
 

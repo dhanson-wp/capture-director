@@ -107,7 +107,7 @@ The app is recorded at 3840x2160 on the solid color, and then the usual zoom and
 
 ### Steps and targets
 
-The steps that work on an app shot are `wait`, `click`, `hover`, `move`, `press`, `type`, and `scroll`. `press` takes a key with modifiers, like `cmd+o` or `ctrl+cmd+i`. `move` takes a point in the 1920x1080 frame (the same space as the coordinates in `capture.json`) or a target.
+The steps that work on an app shot are `wait`, `click`, `hover`, `move`, `press`, `type`, and `scroll`. `press` takes a key with modifiers, like `cmd+o` or `ctrl+cmd+i`. It presses keys by their position on a US keyboard, so on another layout a shortcut's letter may land on a different key; `type` sends the characters themselves and works on any layout. `move` takes a point in the 1920x1080 frame (the same space as the coordinates in `capture.json`) or a target, and so does `cursor.start`.
 
 A target is how a step finds a control through the app's accessibility tree. Use whichever fits:
 
@@ -119,7 +119,7 @@ A target is how a step finds a control through the app's accessibility tree. Use
 
 An `id` is the sturdiest, since it doesn't change with the app's wording. If you build the app yourself, set the accessibility identifier on the controls you plan to film.
 
-Shot options that only make sense for a web page (`scale`, `hideScrollbars`, `setup`, `viewport`, `css`, `hide`, and `waitUntil`) are rejected on an app shot, by name. Per-step `zoom: false` isn't supported on app shots yet. To zoom only on hovers and leave clicks at full frame, set `zoom: { on: [hover] }` on the shot, as the tour does.
+Shot options that only make sense for a web page (`scale`, `hideScrollbars`, `setup`, `viewport`, `css`, `hide`, and `waitUntil`) are rejected on an app shot, by name. Per-step `zoom` works the same as on a web shot: a number sets that step's zoom, and `zoom: false` keeps that click or hover at full frame. To zoom only on hovers and leave every click at full frame, set `zoom: { on: [hover] }` on the shot, as the tour does.
 
 ### Permissions
 
@@ -128,7 +128,7 @@ macOS asks for two permissions, and both go to Capture Director, not to Terminal
 - **Screen Recording**, to capture the app's windows.
 - **Accessibility**, to find controls and to move the mouse and press keys.
 
-The first take asks for Screen Recording, and the next asks for Accessibility. Allow each in System Settings, then record again.
+The first take asks for both at once. Allow each in System Settings, then record again.
 
 The app is ad-hoc signed, so every rebuild or reinstall changes its signature. macOS then quietly stops honoring the old grant, even though the switch still looks on. If a take stalls on a permission you already gave, reset both and allow the prompts again:
 
@@ -141,9 +141,11 @@ Keep one copy of the app installed. Two copies with the same app ID confuse the 
 
 ### During a take
 
-The take drives your real mouse and keyboard, so keep your hands off. Moving the mouse or pressing Escape cancels it cleanly, and no clip is written. Each shot folder gets a `recorder.log` that says what stopped a take, which is the first place to look when one ends early.
+The take drives your real mouse and keyboard, so keep your hands off. Moving the mouse, clicking, scrolling, or pressing Escape cancels it cleanly, and no clip is written. A cancelled take also stops the run: the shots after it aren't recorded, the JSON summary marks that shot `cancelled: true`, and the command exits with code 2 (errors exit with 1). A clip from an earlier run stays in its shot folder. Each shot folder gets a `recorder.log` that says what stopped a take, which is the first place to look when one ends early.
 
-If the app is already open with unsaved work, the take asks you to quit it first. It won't force-quit anything.
+Input only ever goes to the app you're recording. Before each click or scroll, the take checks that the app is what's under the pointer, and before each key, that it still has focus. If another window got in the way, the take stops rather than click or type into it.
+
+If the app is already running, the take quits it first and reopens it afterward. If it won't quit (say it has unsaved work), the take stops and asks you to quit it yourself. The only copy a take ever force-quits is the one it launched itself, and only when that copy won't quit on its own.
 
 Agents running in a sandboxed shell are fine: the CLI starts the recorder through LaunchServices (`open`), which works from a sandbox. Launching the app's binary directly from a sandboxed shell can hang, so don't.
 
@@ -274,6 +276,8 @@ Every command prints a JSON summary on stdout and progress on stderr, so an agen
 - `filter.txt`: the exact ffmpeg filter graph, handy when something looks off
 - `<id>.mp4`: the finished clip
 
+An app shot's folder has `raw.mov` (the recording) in place of `frames/`, plus `recorder.log`, `result.json`, and `job.json`, the job the CLI handed the recorder. `job.json` holds the shot's `env` values, so think twice before sharing a shot folder whose `env` holds anything private.
+
 ## Keeping captures organized
 
 Clips end up wherever each shot list lives, which gets scattered fast. So every clip from `record` and every video from `render` also lands in a library, and `capture-director library` opens it in your browser.
@@ -319,7 +323,7 @@ For a more designed piece, such as kinetic type, animated end cards, or motion g
 ## Safety and privacy
 
 - **Everything runs on your machine.** There's no server you don't run, no account, and no telemetry. Nothing is uploaded.
-- **Recording a Mac app is the one time it drives your real mouse and keyboard.** That's why macOS makes you grant Screen Recording and Accessibility to Capture Director. It captures only the target app's windows, never the rest of your screen, and moving the mouse or pressing Escape stops it.
+- **Recording a Mac app is the one time it drives your real mouse and keyboard.** That's why macOS makes you grant Screen Recording and Accessibility to Capture Director. It captures only the target app's windows, never the rest of your screen, sends clicks and keys only to that app, and moving the mouse, clicking, scrolling, or pressing Escape stops it.
 - **The browser starts logged out every time.** Each shot gets a fresh, empty Chrome profile, with no cookies, saved passwords, or extensions from your own browser. You can't accidentally record your admin bar or inbox.
 - **Chrome keeps its sandbox on.** Playwright turns Chrome's sandbox off by default; capture director turns it back on, since it's visiting websites you don't control. Downloads are refused. (`CD_NO_SANDBOX=1` is there for containers that can't run it.)
 - **Network traffic goes only where you point it:** the URLs in your shot list, plus any font URLs in your timeline. Shot URLs must be `http` or `https`, and clips and music must be local files, so ffmpeg never fetches anything.
@@ -327,6 +331,7 @@ For a more designed piece, such as kinetic type, animated end cards, or motion g
 - **The library stays on your machine.** `capture-director library` listens on `127.0.0.1` only, answers only to its own address, and needs the one-time link printed in your terminal. It can't be reached from your network or driven by other websites, and it never deletes a file.
 - **Two dependencies:** `playwright-core` (it drives your installed Chrome, with no browser download) and `yaml`. `npm audit` reports no known vulnerabilities.
 - **Mind what's on the page.** It records exactly what a logged-out visitor sees. Don't record staging sites or pages with personal data you wouldn't publish.
+- **Mind what's in the app.** A Mac app shot records whatever the app shows. Relaunching an app can restore its last documents and panels (an Open panel lists your home folder, for example), so point `env` at demo data and check the first frames before you share a clip.
 
 See [SECURITY.md](SECURITY.md) for the details and how to report a problem.
 
@@ -341,7 +346,7 @@ npm test            # the CLI
 mac/tools/test.sh   # the Mac app's unit tests
 ```
 
-The tests cover the zoom planner, app shot parsing, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules. The Mac app has its own Swift tests. GitHub Actions runs them on Node 20 and 22 for every pull request and every push to `main`.
+The tests cover the zoom planner, app shot parsing, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules. GitHub Actions runs the Node tests on Ubuntu, on Node 20 and 22, for every pull request and every push to `main`. The Mac app's Swift tests and its self-test need a Mac, so run `mac/tools/test.sh` and `mac/tools/selftest.sh` there before you send a change to the app.
 
 ## License
 
