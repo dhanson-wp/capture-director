@@ -49,10 +49,10 @@ public struct RecordJob: Codable, Sendable {
         env = try c.decodeIfPresent([String: String].self, forKey: .env) ?? [:]
         window = try c.decode(Size.self, forKey: .window)
         background = try c.decode(String.self, forKey: .background)
-        fps = try c.decode(Int.self, forKey: .fps)
+        fps = try c.wholeNumber(.fps)
         countdown = try c.decode(Double.self, forKey: .countdown)
-        settle = try c.decode(Int.self, forKey: .settle)
-        tail = try c.decode(Int.self, forKey: .tail)
+        settle = try c.wholeNumber(.settle)
+        tail = try c.wholeNumber(.tail)
         cursorStart = try c.decodeIfPresent([Double].self, forKey: .cursorStart)
         steps = try c.decode([Step].self, forKey: .steps)
         out = try c.decode(String.self, forKey: .out)
@@ -102,14 +102,34 @@ public struct RecordJob: Codable, Sendable {
     }
 
     private static func describe(_ error: DecodingError) -> String {
+        func path(_ ctx: DecodingError.Context) -> String {
+            let parts = ctx.codingPath.map { $0.intValue.map { "[\($0)]" } ?? $0.stringValue }
+            return parts.isEmpty ? "" : "\"" + parts.joined(separator: ".") + "\": "
+        }
         switch error {
         case .dataCorrupted(let ctx), .typeMismatch(_, let ctx), .valueNotFound(_, let ctx):
-            return ctx.debugDescription
-        case .keyNotFound(let key, _):
-            return "\"\(key.stringValue)\" is missing."
+            return path(ctx) + ctx.debugDescription
+        case .keyNotFound(let key, let ctx):
+            return path(ctx) + "\"\(key.stringValue)\" is missing."
         @unknown default:
             return "it couldn't be read."
         }
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// Node passes numbers through unrounded (`ms: 1500.5`), so read a Double and round.
+    /// Rejects values that are negative or too big to be a time or rate.
+    func wholeNumber(_ key: Key) throws -> Int {
+        let value = try decode(Double.self, forKey: key)
+        guard value.isFinite, value >= 0, value < 1e9 else {
+            throw DecodingError.dataCorruptedError(forKey: key, in: self, debugDescription: "\(key.stringValue) must be a number from 0 up, not \(value).")
+        }
+        return Int(value.rounded())
+    }
+
+    func wholeNumberIfPresent(_ key: Key) throws -> Int? {
+        contains(key) && (try? decodeNil(forKey: key)) != true ? try wholeNumber(key) : nil
     }
 }
 
@@ -186,17 +206,17 @@ public enum Step: Codable, Sendable, Equatable {
 
         switch kind {
         case "wait":
-            self = .wait(ms: try c.decode(Int.self, forKey: .ms))
+            self = .wait(ms: try c.wholeNumber(.ms))
         case "click":
             self = .click(try needTarget(), zoom: try c.decodeIfPresent(Double.self, forKey: .zoom),
-                          hold: try c.decodeIfPresent(Int.self, forKey: .hold),
-                          duration: try c.decodeIfPresent(Int.self, forKey: .duration))
+                          hold: try c.wholeNumberIfPresent(.hold),
+                          duration: try c.wholeNumberIfPresent(.duration))
         case "hover":
             self = .hover(try needTarget(), zoom: try c.decodeIfPresent(Double.self, forKey: .zoom),
-                          hold: try c.decodeIfPresent(Int.self, forKey: .hold),
-                          duration: try c.decodeIfPresent(Int.self, forKey: .duration))
+                          hold: try c.wholeNumberIfPresent(.hold),
+                          duration: try c.wholeNumberIfPresent(.duration))
         case "move":
-            let duration = try c.decodeIfPresent(Int.self, forKey: .duration)
+            let duration = try c.wholeNumberIfPresent(.duration)
             if let p = try c.decodeIfPresent([Double].self, forKey: .point) {
                 guard p.count == 2, p.allSatisfy(\.isFinite) else {
                     throw DecodingError.dataCorruptedError(forKey: .point, in: c, debugDescription: "A move point needs two numbers.")
@@ -210,7 +230,7 @@ public enum Step: Codable, Sendable, Equatable {
         case "type":
             self = .type(text: try c.decode(String.self, forKey: .text))
         case "scroll":
-            self = .scroll(by: try c.decode(Double.self, forKey: .by), duration: try c.decodeIfPresent(Int.self, forKey: .duration))
+            self = .scroll(by: try c.decode(Double.self, forKey: .by), duration: try c.wholeNumberIfPresent(.duration))
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "Mac app shots don't support the \"\(kind)\" step.")
         }

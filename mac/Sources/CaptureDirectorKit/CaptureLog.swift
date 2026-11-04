@@ -70,11 +70,11 @@ public struct CaptureLog: Sendable {
         var presses: [Press]
     }
 
-    public func json(duration: Double, source: String) -> Data {
+    public func json(duration: Double, source: String) throws -> Data {
         let file = File(duration: duration, source: source, cursorStart: cursorStart,
                         events: events, moves: moves, presses: presses)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try! encoder.encode(file)
+        return try encoder.encode(file)
     }
 }

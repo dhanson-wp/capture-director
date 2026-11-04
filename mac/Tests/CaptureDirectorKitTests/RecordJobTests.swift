@@ -61,3 +61,17 @@ private func load(_ data: Data) throws -> RecordJob {
     #expect(message(#"[{"kind":"drag","by":[1,2]}]"#).contains("\"drag\""))
     #expect(message(#"[{"kind":"click"}]"#).contains("needs an id, a label, or a target"))
 }
+
+@Test func fractionalTimesRoundInsteadOfFailing() throws {
+    let job = try load(jobJSON(steps: #"[{"kind":"wait","ms":1500.5},{"kind":"click","id":"a","hold":2400.4,"duration":900.5}]"#))
+    #expect(job.steps == [.wait(ms: 1501), .click(.id("a"), zoom: nil, hold: 2400, duration: 901)])
+}
+
+@Test func badTimesNameTheField() {
+    func message(_ steps: String) -> String {
+        do { _ = try load(jobJSON(steps: steps)); return "" } catch { return error.localizedDescription }
+    }
+    let m = message(#"[{"kind":"wait","ms":-5}]"#)
+    #expect(m.contains("ms") && m.contains("steps"))
+    #expect(message(#"[{"kind":"click","id":"a","hold":"soon"}]"#).contains("hold"))
+}
