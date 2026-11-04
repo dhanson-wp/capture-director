@@ -2,11 +2,12 @@
 
 import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
-import { recordShot, withBrowser } from './record.js';
+import { normalizeStep, recordShot, withBrowser } from './record.js';
 import { remember } from './library.js';
+import { recordAppShot } from './native.js';
 import { renderCursor } from './browser.js';
 import { zoomPlan, zoomFilter, cursorExprs, pressedEnable, ZOOM_DEFAULTS } from './effects.js';
-import { ffmpeg, finite, loadYaml, log, merge, parseSize, probe, resolveFrom, safeId } from './util.js';
+import { ffmpeg, finite, hexColor, loadYaml, log, merge, parseSize, probe, resolveFrom, safeId } from './util.js';
 
 const PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow', 'placebo'];
 
@@ -24,6 +25,66 @@ export const SHOT_DEFAULTS = {
 	zoom: ZOOM_DEFAULTS,
 };
 
+// Options that only make sense for a page in headless Chrome.
+const WEB_ONLY = ['scale', 'hideScrollbars', 'setup', 'viewport', 'css', 'hide', 'waitUntil'];
+const APP_STEPS = ['wait', 'click', 'hover', 'move', 'press', 'type', 'scroll'];
+const BUNDLE_ID = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
+// Dynamic-loader variables would load code into the target app.
+const LOADER_ENV = /^(DYLD_|LD_)/;
+const WINDOW_MIN = { width: 760, height: 480 };
+const WINDOW_MAX = { width: 3000, height: 2000 };
+
+function appTarget(app, file, id) {
+	const bad = () => new Error(`Shot ${id}: app must be a bundle ID or a path to an .app`);
+	if (typeof app !== 'string') throw bad();
+	if (!app.includes('/')) {
+		if (!BUNDLE_ID.test(app)) throw bad();
+		return { bundleId: app };
+	}
+	const full = resolveFrom(file, app);
+	if (!path.isAbsolute(full) || !full.endsWith('.app')) throw bad();
+	return { path: full };
+}
+
+function appEnv(env, file, id) {
+	if (env === undefined || env === null) return {};
+	if (typeof env !== 'object' || Array.isArray(env)) throw new Error(`Shot ${id}: env must be a map of names to strings`);
+	const out = {};
+	for (const [k, v] of Object.entries(env)) {
+		if (!ENV_NAME.test(k)) throw new Error(`Shot ${id}: env name "${k}" must be capital letters, digits, and underscores`);
+		if (LOADER_ENV.test(k)) throw new Error(`Shot ${id}: env can't set ${k}; loader variables aren't allowed.`);
+		if (typeof v !== 'string' || v.includes('\0')) throw new Error(`Shot ${id}: env ${k} must be a string`);
+		// ./ and ../ mean "next to the YAML file"; anything else goes through as written.
+		out[k] = /^\.\.?\//.test(v) ? path.resolve(path.dirname(file), v) : v;
+	}
+	return out;
+}
+
+// Check an app shot and fill in its app-only fields. `raw` is the shot as written, `shot` the merged one.
+function loadAppShot(shot, raw, file) {
+	const id = shot.id;
+	if (raw.url) throw new Error(`Shot ${id}: use url or app, not both`);
+	for (const k of WEB_ONLY) if (k in raw) throw new Error(`Shot ${id}: ${k} only works on web shots`);
+	for (const k of [...WEB_ONLY, 'url']) delete shot[k];
+	shot.kind = 'app';
+	shot.app = appTarget(shot.app, file, id);
+	shot.env = appEnv(shot.env, file, id);
+	shot.background = hexColor(shot.background ?? '#4c1637', `Shot ${id}: background`);
+	const win = shot.window ?? {};
+	shot.window = { width: finite(win.width ?? 1440, `${id} window width`, { min: WINDOW_MIN.width, max: WINDOW_MAX.width }), height: finite(win.height ?? 900, `${id} window height`, { min: WINDOW_MIN.height, max: WINDOW_MAX.height }) };
+	shot.countdown = finite(shot.countdown ?? 3, `${id} countdown`, { min: 0, max: 30 });
+	shot.recordFps = finite(shot.recordFps ?? 60, `${id} recordFps`, { min: 1, max: 120 });
+	shot.settle = finite(shot.settle ?? 400, `${id} settle`, { min: 0, max: 60000 });
+	shot.tail = finite(shot.tail, `${id} tail`, { min: 0, max: 60000 });
+	if (shot.actions !== undefined && !Array.isArray(shot.actions)) throw new Error(`Shot ${id}: actions must be a list`);
+	for (const step of shot.actions || []) {
+		const { kind, by } = normalizeStep(step);
+		if (!APP_STEPS.includes(kind)) throw new Error(`Shot ${id}: ${kind} doesn't work in app shots`);
+		if (kind === 'scroll') finite(by, `${id} scroll by`, { min: -1e6, max: 1e6 });
+	}
+}
+
 export async function loadShots(file) {
 	const doc = await loadYaml(file);
 	const defaults = merge(SHOT_DEFAULTS, doc.defaults || {});
@@ -35,13 +96,17 @@ export async function loadShots(file) {
 		shot.project = doc.project || path.basename(path.dirname(path.resolve(file)));
 		if (typeof shot.zoom === 'boolean') shot.zoom = { ...defaults.zoom, enabled: shot.zoom };
 		if (typeof shot.cursor === 'boolean') shot.cursor = { ...defaults.cursor, enabled: shot.cursor };
-		if (!shot.url) throw new Error(`Shot ${shot.id} has no url`);
-		// Web pages only. A file: URL would record whatever local file it names.
-		if (!/^https?:\/\//i.test(shot.url)) throw new Error(`Shot ${shot.id}: url must start with http:// or https://`);
+		if (shot.app !== undefined) loadAppShot(shot, s, file);
+		else shot.kind = 'web';
+		if (shot.kind === 'web') {
+			if (!shot.url) throw new Error(`Shot ${shot.id} has no url`);
+			// Web pages only. A file: URL would record whatever local file it names.
+			if (!/^https?:\/\//i.test(shot.url)) throw new Error(`Shot ${shot.id}: url must start with http:// or https://`);
+			shot.scale = finite(shot.scale, `${shot.id} scale`, { min: 0.5, max: 4 });
+		}
 		shot.fps = finite(shot.fps, `${shot.id} fps`, { min: 1, max: 120 });
 		shot.crf = finite(shot.crf, `${shot.id} crf`, { min: 0, max: 51 });
 		shot.quality = finite(shot.quality, `${shot.id} quality`, { min: 1, max: 100 });
-		shot.scale = finite(shot.scale, `${shot.id} scale`, { min: 0.5, max: 4 });
 		if (!PRESETS.includes(shot.preset)) throw new Error(`Shot ${shot.id}: unknown preset "${shot.preset}"`);
 		return shot;
 	});
@@ -56,13 +121,32 @@ function pick(shots, only) {
 	return picked;
 }
 
-export async function record(file, { only } = {}) {
+/** The stderr line for a run a cancelled take stopped, or null when nothing was cancelled. */
+export function stoppedLine(results) {
+	const stopped = results.find((r) => r.cancelled);
+	if (!stopped) return null;
+	return `The run stopped at ${stopped.id}. ${stopped.message || 'The take was cancelled.'}`;
+}
+
+export async function record(file, { only, run, env, platform = process.platform } = {}) {
 	const { outDir, shots } = await loadShots(file);
+	const picked = pick(shots, only);
+	if (platform !== 'darwin' && picked.some((s) => s.kind === 'app')) throw new Error('Recording Mac apps only works on macOS.');
 	const results = [];
-	for (const shot of pick(shots, only)) {
+	for (const shot of picked) {
 		const dir = path.join(outDir, shot.id);
 		await mkdir(dir, { recursive: true });
-		await withBrowser((browser) => recordShot(browser, shot, dir), { scale: shot.scale });
+		if (shot.kind === 'app') {
+			const result = await recordAppShot(shot, dir, { run, env });
+			// A cancelled take stops the whole run; the person at the Mac wants it back.
+			if (result.status === 'cancelled') {
+				results.push({ id: shot.id, cancelled: true, ...(result.message ? { message: result.message } : {}) });
+				break;
+			}
+			if (result.status === 'error') throw new Error(`${shot.id}: ${result.message || 'The recorder failed.'}`);
+		} else {
+			await withBrowser((browser) => recordShot(browser, shot, dir), { scale: shot.scale });
+		}
 		results.push(await withBrowser((browser) => processShot(browser, shot, dir)));
 	}
 	return results;
@@ -86,7 +170,12 @@ export async function processShot(browser, shot, dir) {
 	const cap = JSON.parse(await readFile(capPath, 'utf8'));
 	// capture.json lands in the filter graph, so check it as carefully as the YAML.
 	cap.duration = finite(cap.duration, `${shot.id} capture duration`, { min: 0 });
-	const first = await probe(path.join(dir, 'frames', '000000.jpg'));
+	// App shots carry a recorded video; web shots carry a frame list.
+	if (cap.source !== undefined && !(typeof cap.source === 'string' && /^(?!\.\.?$)[\w.-]+$/.test(cap.source))) {
+		throw new Error(`${shot.id}: source must be a plain file name`);
+	}
+	const video = cap.source ? path.join(dir, cap.source) : null;
+	const first = await probe(video ?? path.join(dir, 'frames', '000000.jpg'));
 	const W = first.width;
 	const H = first.height;
 	const k = W / cap.viewport.width; // CSS px to device px
@@ -99,9 +188,9 @@ export async function processShot(browser, shot, dir) {
 	const zoom = zoomFilter(plan, { W, H, fps });
 
 	// Safe mode (the default) only accepts plain relative names, which is all the recorder writes.
-	const inputs = ['-f', 'concat', '-i', path.join(dir, 'frames', 'list.ffconcat')];
-	// The concat demuxer can run long on the held last frame, so trim to the real length.
-	const chain = [`[0:v]fps=${fps},trim=duration=${cap.duration},setpts=PTS-STARTPTS,format=yuv420p[b0]`];
+	const inputs = video ? ['-i', video] : ['-f', 'concat', '-i', path.join(dir, 'frames', 'list.ffconcat')];
+	// The concat demuxer can run long on the held last frame, so trim to the real length. A video already has its real length.
+	const chain = [`[0:v]fps=${fps},${video ? '' : `trim=duration=${cap.duration},`}setpts=PTS-STARTPTS,format=yuv420p[b0]`];
 	let last = 'b0';
 
 	if (shot.cursor.enabled) {

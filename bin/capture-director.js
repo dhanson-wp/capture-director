@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import path from 'node:path';
-import { record, processAll } from '../src/shots.js';
+import { record, processAll, stoppedLine } from '../src/shots.js';
 import { render, contactSheet, stills } from '../src/render.js';
 import { serve, importPath, addFolder, renameFolder, removeFolder, setEntries, forget, relocate } from '../src/library.js';
 import { exportEntry } from '../src/export.js';
@@ -109,6 +109,12 @@ async function main() {
 			process.exit(cmd && cmd !== 'help' && cmd !== '--help' ? 1 : 0);
 	}
 	process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+	const stopped = cmd === 'record' && stoppedLine(result);
+	if (stopped) {
+		// Exit 2: the run didn't fail, someone stopped it. Errors exit 1.
+		console.error(`[capture-director] ${stopped}`);
+		process.exitCode = 2;
+	}
 }
 
 main().catch((err) => {

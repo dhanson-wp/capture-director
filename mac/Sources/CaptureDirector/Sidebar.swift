@@ -76,6 +76,20 @@ struct Sidebar: View {
         Label(page.title, systemImage: page.symbol)
             .badge(Self.count(page, in: library, now: now))
             .tag(page)
+            .accessibilityIdentifier(Self.identifier(page))
+    }
+
+    /// Stable names for scripted tours. Folders use their full library path.
+    static func identifier(_ page: SidebarItem) -> String {
+        switch page {
+        case .all: "sidebar.all"
+        case .recent: "sidebar.recent"
+        case .starred: "sidebar.starred"
+        case .finals: "sidebar.finals"
+        case .clips: "sidebar.clips"
+        case .unsorted: "sidebar.unsorted"
+        case .folder(let path): "sidebar.folder.\(path)"
+        }
     }
 
     private var footer: some View {
@@ -137,11 +151,13 @@ private struct FolderRow: View {
                 Image(systemName: "folder")
             }
             .tag(SidebarItem.folder(node.path))
+            .accessibilityIdentifier(Sidebar.identifier(.folder(node.path)))
         } else {
             Label(node.name, systemImage: "folder")
                 .badge(node.count)
                 .help(node.path)
                 .tag(SidebarItem.folder(node.path))
+                .accessibilityIdentifier(Sidebar.identifier(.folder(node.path)))
                 .onDrag {
                     model.browser.draggingFolder = node.path
                     let provider = NSItemProvider()

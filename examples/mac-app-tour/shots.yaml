@@ -1,0 +1,35 @@
+# A tour of Capture Director.app, recorded from the CLI. macOS only.
+# Fill the demo library first: ./make-demo-library.sh /tmp/capture-director-tour-home
+# The app needs Screen Recording and Accessibility access (see the README).
+out: out
+
+shots:
+  - id: tour
+    app: io.github.dhanson-wp.capture-director
+    env:
+      CD_HOME: /tmp/capture-director-tour-home
+    background: "#4c1637"
+    # Zoom on hovers only, so clicks stay at full frame.
+    zoom: { on: [hover] }
+    actions:
+      - wait: 1200
+      - hover: { id: sidebar.folder.Blog, zoom: 1.5, hold: 700 }
+      - click: { id: sidebar.folder.Blog, hold: 600 }
+      - wait: 600
+      - click: { id: sidebar.starred, hold: 900 }
+      - wait: 600
+      - click: { id: sidebar.all, hold: 900 }
+      - wait: 500
+      # Only hovers zoom (shot-level zoom.on): the Blog folder and the inspector.
+      # Play the first capture: select it, then the app's Play shortcut.
+      - click: { id: grid.item.0, hold: 500 }
+      - press: cmd+o
+      - wait: 3000
+      - click: { id: player.close, hold: 600 }
+      - wait: 500
+      - click: { id: grid.item.0, hold: 500 }
+      # Control-Command-I shows the inspector, which starts hidden.
+      - press: ctrl+cmd+i
+      - wait: 700
+      - hover: { id: inspector, zoom: 1.7, hold: 2400 }
+    tail: 600

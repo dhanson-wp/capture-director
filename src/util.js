@@ -78,6 +78,12 @@ export function finite(v, what, { min = -Infinity, max = Infinity } = {}) {
 	return n;
 }
 
+// A plain #rrggbb color, safe to put in an ffmpeg filter graph.
+export function hexColor(v, what) {
+	if (typeof v !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(v)) throw new Error(`${what} must be a color like #4c1637`);
+	return v;
+}
+
 // Output files must have a media extension, so a typo can't overwrite a dotfile or a document.
 export function outputPath(p, exts, what) {
 	const ext = path.extname(p).toLowerCase();
