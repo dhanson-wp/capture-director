@@ -26,8 +26,9 @@ public enum FrameError: Error, LocalizedError, Equatable {
     }
 }
 
-/// The window takes 80% of the frame's width.
+/// Leave room for shadows without changing the default wide-window framing.
 private let windowShare: CGFloat = 0.8
+private let windowHeightShare: CGFloat = 0.9
 private let minimumWindow = CGSize(width: 760, height: 480)
 
 /// Fits a 16:9 source rect, centered in `visible`, around the requested window size.
@@ -36,14 +37,14 @@ public func layout(requested: CGSize, visible: CGRect) throws -> FrameLayout {
     guard requested.width > 0, requested.height > 0, visible.width > 0, visible.height > 0 else {
         throw FrameError.displayTooSmall
     }
-    let sourceWidth = requested.width / windowShare
+    let sourceWidth = max(requested.width / windowShare, requested.height / windowHeightShare * 16 / 9)
     let sourceHeight = sourceWidth * 9 / 16
     let scale = min(1, visible.width / sourceWidth, visible.height / sourceHeight)
     let window = CGSize(width: requested.width * scale, height: requested.height * scale)
     guard window.width >= minimumWindow.width, window.height >= minimumWindow.height else {
         throw FrameError.displayTooSmall
     }
-    let source = CGSize(width: window.width / windowShare, height: window.width / windowShare * 9 / 16)
+    let source = CGSize(width: sourceWidth * scale, height: sourceHeight * scale)
     let center = CGPoint(x: visible.midX, y: visible.midY)
     let sourceRect = CGRect(x: center.x - source.width / 2, y: center.y - source.height / 2, width: source.width, height: source.height)
     let origin = CGPoint(x: center.x - window.width / 2, y: center.y - window.height / 2)

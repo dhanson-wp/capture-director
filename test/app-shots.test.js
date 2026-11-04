@@ -39,6 +39,16 @@ test('a web shot is kind web', async () => {
 	assert.equal(shots[0].kind, 'web');
 });
 
+test('app targets and environment can be inherited from defaults', async () => {
+	const dir = await mkdtemp(`${tmpdir()}/cd-app-defaults-`);
+	const file = path.join(dir, 'shots.yml');
+	await writeFile(file, `defaults:\n  app: ${BUNDLE}\n  env: { CD_HOME: ./demo }\nshots:\n  - id: one\n    actions: [500]\n  - id: two\n    app: com.apple.TextEdit\n    actions: [500]\n`);
+	const { shots } = await loadShots(file);
+	assert.deepEqual(shots.map((s) => s.kind), ['app', 'app']);
+	assert.deepEqual(shots.map((s) => s.app.bundleId), [BUNDLE, 'com.apple.TextEdit']);
+	assert.deepEqual(shots[0].env, { CD_HOME: path.join(dir, 'demo') });
+});
+
 test('an .app path is accepted', async () => {
 	const { shots } = await load('app: /Applications/TextEdit.app');
 	assert.deepEqual(shots[0].app, { path: '/Applications/TextEdit.app' });
@@ -105,6 +115,13 @@ test('app steps only use app actions', async () => {
 	await assert.rejects(load(`app: ${BUNDLE}\nactions:\n  - eval: "1"`), /eval doesn't work in app shots/);
 	await assert.rejects(load(`app: ${BUNDLE}\nactions:\n  - drag: [1, 2]`), /drag doesn't work in app shots/);
 	await load(`app: ${BUNDLE}\nactions:\n  - 500\n  - wait: 200\n  - click: { id: grid.item.0 }\n  - hover: x\n  - move: [10, 20]\n  - press: cmd+o\n  - type: hi\n  - scroll: 100`);
+});
+
+test('app scroll values are bounded before a recorder launches', async () => {
+	for (const by of ['1e12', '-1e12', '.inf', '.nan', 'nope']) {
+		await assert.rejects(load(`app: ${BUNDLE}\nactions: [{ scroll: { by: ${by}, duration: 0 } }]`), /scroll by/);
+	}
+	await load(`app: ${BUNDLE}\nactions: [{ scroll: 1000000 }, { scroll: -1000000 }]`);
 });
 
 test('countdown, recordFps, and settle are checked numbers', async () => {

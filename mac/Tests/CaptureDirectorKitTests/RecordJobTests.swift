@@ -104,3 +104,13 @@ private func load(_ data: Data) throws -> RecordJob {
     #expect(m.contains("ms") && m.contains("steps"))
     #expect(message(#"[{"kind":"click","id":"a","hold":"soon"}]"#).contains("hold"))
 }
+
+@Test func oversizedScrollsAreRejectedBeforeTheTakeStarts() throws {
+    for by in ["1e12", "-1e12"] {
+        #expect(throws: RecordJobError.self) {
+            try load(jobJSON(steps: "[{\"kind\":\"scroll\",\"by\":\(by),\"duration\":0}]"))
+        }
+    }
+    let job = try load(jobJSON(steps: #"[{"kind":"scroll","by":1000000},{"kind":"scroll","by":-1000000}]"#))
+    #expect(job.steps == [.scroll(by: 1e6, duration: nil), .scroll(by: -1e6, duration: nil)])
+}

@@ -103,11 +103,11 @@ shots:
 
 The full tour is in `examples/mac-app-tour/`. `make-demo-library.sh` fills a scratch library so the app has something to show, and `env` points the app at it, so the tour never touches `~/.capture-director`. The inspector starts hidden, so the tour presses Control-Command-I to show it. Relative `env` values that start with `./` or `../` resolve from the YAML file's folder.
 
-The app is recorded at 3840x2160 on the solid color, and then the usual zoom and cursor step turns that into a 1080p clip. The window is about 80 percent of the frame width, with its macOS shadow.
+The app is recorded at 3840x2160 on the solid color, and then the usual zoom and cursor step turns that into a 1080p clip. The window takes up to 80 percent of the frame width, with room for its macOS shadow. Taller windows get a wider capture region so their top and bottom stay in frame.
 
 ### Steps and targets
 
-The steps that work on an app shot are `wait`, `click`, `hover`, `move`, `press`, `type`, and `scroll`. `press` takes a key with modifiers, like `cmd+o` or `ctrl+cmd+i`. It presses keys by their position on a US keyboard, so on another layout a shortcut's letter may land on a different key; `type` sends the characters themselves and works on any layout. `move` takes a point in the 1920x1080 frame (the same space as the coordinates in `capture.json`) or a target, and so does `cursor.start`.
+The steps that work on an app shot are `wait`, `click`, `hover`, `move`, `press`, `type`, and `scroll`. `scroll.by` must be between -1,000,000 and 1,000,000 frame pixels; larger values fail before the app opens. `press` takes a key with modifiers, like `cmd+o` or `ctrl+cmd+i`. It presses keys by their position on a US keyboard, so on another layout a shortcut's letter may land on a different key; `type` sends the characters themselves and works on any layout. `move` takes a point in the 1920x1080 frame (the same space as the coordinates in `capture.json`) or a target, and so does `cursor.start`.
 
 A target is how a step finds a control through the app's accessibility tree. Use whichever fits:
 
@@ -142,6 +142,8 @@ Keep one copy of the app installed. Two copies with the same app ID confuse the 
 ### During a take
 
 The take drives your real mouse and keyboard, so keep your hands off. Moving the mouse, clicking, scrolling, or pressing Escape cancels it cleanly, and no clip is written. A cancelled take also stops the run: the shots after it aren't recorded, the JSON summary marks that shot `cancelled: true`, and the command exits with code 2 (errors exit with 1). A clip from an earlier run stays in its shot folder. Each shot folder gets a `recorder.log` that says what stopped a take, which is the first place to look when one ends early.
+
+Ctrl-C or SIGTERM sent to the CLI also cancels the take. The command waits for the recorder to release input and restore the app before it exits. Rebuild the Mac app after updating the CLI so both sides use this cancellation channel.
 
 Input only ever goes to the app you're recording. Before each click or scroll, the take checks that the app is what's under the pointer, and before each key, that it still has focus. If another window got in the way, the take stops rather than click or type into it.
 

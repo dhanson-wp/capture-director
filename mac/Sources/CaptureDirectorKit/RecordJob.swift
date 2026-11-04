@@ -104,6 +104,11 @@ public struct RecordJob: Codable, Sendable {
             }
         }
         guard !steps.isEmpty else { throw RecordJobError("The job has no steps.") }
+        for case .scroll(let by, _) in steps {
+            guard by.isFinite, abs(by) <= 1e6 else {
+                throw RecordJobError("scroll by must be between -1000000 and 1000000.")
+            }
+        }
         guard !out.isEmpty else { throw RecordJobError("The job needs an output folder.") }
     }
 

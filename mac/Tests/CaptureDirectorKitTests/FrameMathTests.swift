@@ -38,3 +38,27 @@ private func close(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 0.001 }
         try layout(requested: CGSize(width: 1440, height: 900), visible: CGRect(x: 0, y: 0, width: 900, height: 600))
     }
 }
+
+@Test func tallWindowsFitInsideTheCaptureWithRoomForShadows() throws {
+    for requested in [CGSize(width: 1200, height: 1000), CGSize(width: 1000, height: 1600)] {
+        let visible = CGRect(x: 0, y: 25, width: 2560, height: 2000)
+        let l = try layout(requested: requested, visible: visible)
+        let window = CGRect(origin: l.windowOrigin, size: l.windowSize)
+        #expect(l.sourceRect.contains(window))
+        #expect(visible.contains(l.sourceRect))
+        #expect(window.minY > l.sourceRect.minY && window.maxY < l.sourceRect.maxY)
+        #expect(close(l.sourceRect.width / l.sourceRect.height, 16.0 / 9))
+        #expect(close(window.width / window.height, requested.width / requested.height))
+    }
+}
+
+@Test func tallWindowsShrinkToFitTheDisplayOrFailAtTheMinimum() throws {
+    let visible = CGRect(x: 0, y: 25, width: 2560, height: 1415)
+    let l = try layout(requested: CGSize(width: 1200, height: 1500), visible: visible)
+    #expect(l.windowSize.height < 1500)
+    #expect(visible.contains(l.sourceRect))
+    #expect(l.sourceRect.contains(CGRect(origin: l.windowOrigin, size: l.windowSize)))
+    #expect(throws: FrameError.displayTooSmall) {
+        try layout(requested: CGSize(width: 760, height: 2000), visible: visible)
+    }
+}

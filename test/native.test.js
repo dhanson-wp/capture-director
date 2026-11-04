@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -72,8 +73,13 @@ test('recordAppShot clears the last take and reads result.json', async () => {
 	const [shot] = (await loadShots(file)).shots;
 	await mkdir(out, { recursive: true });
 	await writeFile(path.join(out, 'result.json'), '{"status":"error","message":"old"}');
+	await writeFile(path.join(out, 'job.json.cancel'), 'old cancellation');
 	const env = { CD_APP: await fakeApp() };
-	const result = await recordAppShot(shot, out, { env, run: fakeRun({ status: 'ok' }, { log: 'ready\n' }) });
+	const run = async (args) => {
+		await assert.rejects(access(`${args.jobFile}.cancel`));
+		await fakeRun({ status: 'ok' }, { log: 'ready\n' })(args);
+	};
+	const result = await recordAppShot(shot, out, { env, run });
 	assert.deepEqual(result, { status: 'ok' });
 	assert.equal(JSON.parse(await readFile(path.join(out, 'job.json'), 'utf8')).out, out);
 });
@@ -126,3 +132,78 @@ test('recorder log lines carry the shot id once', () => {
 	assert.equal(tidyLine('[capture-director] tour: opening Notes', 'tour'), 'tour: opening Notes');
 	assert.equal(tidyLine('plain line', 'tour'), 'tour: plain line');
 });
+
+// Exercise actual OS signals and spawnOpen, with a harmless stand-in for
+// LaunchServices. Its recorder runs in a separate process group, just like the app.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+	test(`${signal} stops the independent recorder and waits for cleanup`, { skip: process.platform === 'win32', timeout: 15000 }, async () => {
+		const { file, out } = await project();
+		const app = await fakeApp();
+		const bin = await mkdtemp(`${tmpdir()}/cd-fake-open-`);
+		const worker = `
+			const fs = require('node:fs');
+			const path = require('node:path');
+			const jobFile = process.argv[1];
+			const dir = path.dirname(jobFile);
+			fs.writeFileSync(path.join(dir, 'worker-ready'), String(process.pid));
+			const poll = setInterval(() => {
+				if (!fs.existsSync(jobFile + '.cancel')) return;
+				clearInterval(poll);
+				fs.writeFileSync(path.join(dir, 'cancellation-seen'), 'yes');
+				setTimeout(() => {
+					fs.writeFileSync(path.join(dir, 'cleaned-up'), 'yes');
+					fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify({status: 'cancelled'}));
+				}, 250);
+			}, 10);
+			setTimeout(() => process.exit(3), 10000).unref();
+		`;
+		await writeFile(path.join(bin, 'open'), `#!${process.execPath}
+			const {spawn} = require('node:child_process');
+			const child = spawn(process.execPath, ['-e', ${JSON.stringify(worker)}, process.argv.at(-1)], {detached: true, stdio: 'ignore'});
+			child.on('exit', (code) => process.exit(code ?? 1));
+		`, { mode: 0o755 });
+		const script = `
+			import {loadShots} from ${JSON.stringify(new URL('../src/shots.js', import.meta.url).href)};
+			import {recordAppShot} from ${JSON.stringify(new URL('../src/native.js', import.meta.url).href)};
+			const [shot] = (await loadShots(${JSON.stringify(file)})).shots;
+			const result = await recordAppShot(shot, ${JSON.stringify(out)});
+			console.log(JSON.stringify(result));
+			process.exitCode = result.status === 'cancelled' ? 2 : 1;
+		`;
+		const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+			detached: true, env: { ...process.env, CD_APP: app, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
+			stdio: ['ignore', 'pipe', 'pipe'],
+		});
+		let stdout = '', stderr = '';
+		child.stdout.on('data', (chunk) => { stdout += chunk; });
+		child.stderr.on('data', (chunk) => { stderr += chunk; });
+		const exited = new Promise((resolve, reject) => {
+			child.on('error', reject);
+			child.on('exit', (code, signal) => resolve({ code, signal }));
+		});
+		async function waitFor(name) {
+			const deadline = Date.now() + 5000;
+			while (Date.now() < deadline) {
+				try { return await readFile(path.join(out, name), 'utf8'); } catch {}
+				assert.equal(child.exitCode, null, stderr);
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			assert.fail(`Timed out waiting for ${name}: ${stderr}`);
+		}
+		let workerPid;
+		try {
+			workerPid = Number(await waitFor('worker-ready'));
+			// Signal the whole CLI process group, as a terminal does for Ctrl-C.
+			process.kill(-child.pid, signal);
+			await waitFor('cancellation-seen');
+			assert.equal(child.exitCode, null, 'the CLI must wait for recorder cleanup');
+			process.kill(child.pid, signal); // repeated interrupts must also wait
+			assert.deepEqual(await exited, { code: 2, signal: null });
+			assert.equal(await readFile(path.join(out, 'cleaned-up'), 'utf8'), 'yes');
+			assert.deepEqual(JSON.parse(stdout), { status: 'cancelled' });
+		} finally {
+			if (child.exitCode === null) child.kill('SIGKILL');
+			if (workerPid) { try { process.kill(workerPid, 'SIGKILL'); } catch {} }
+		}
+	});
+}

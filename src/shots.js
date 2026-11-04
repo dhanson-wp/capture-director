@@ -79,8 +79,9 @@ function loadAppShot(shot, raw, file) {
 	shot.tail = finite(shot.tail, `${id} tail`, { min: 0, max: 60000 });
 	if (shot.actions !== undefined && !Array.isArray(shot.actions)) throw new Error(`Shot ${id}: actions must be a list`);
 	for (const step of shot.actions || []) {
-		const { kind } = normalizeStep(step);
+		const { kind, by } = normalizeStep(step);
 		if (!APP_STEPS.includes(kind)) throw new Error(`Shot ${id}: ${kind} doesn't work in app shots`);
+		if (kind === 'scroll') finite(by, `${id} scroll by`, { min: -1e6, max: 1e6 });
 	}
 }
 
@@ -95,7 +96,7 @@ export async function loadShots(file) {
 		shot.project = doc.project || path.basename(path.dirname(path.resolve(file)));
 		if (typeof shot.zoom === 'boolean') shot.zoom = { ...defaults.zoom, enabled: shot.zoom };
 		if (typeof shot.cursor === 'boolean') shot.cursor = { ...defaults.cursor, enabled: shot.cursor };
-		if (s.app !== undefined) loadAppShot(shot, s, file);
+		if (shot.app !== undefined) loadAppShot(shot, s, file);
 		else shot.kind = 'web';
 		if (shot.kind === 'web') {
 			if (!shot.url) throw new Error(`Shot ${shot.id} has no url`);

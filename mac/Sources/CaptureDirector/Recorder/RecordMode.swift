@@ -40,7 +40,7 @@ enum RecordMode {
             writeResult(status: "error", message: message, to: jobURL.deletingLastPathComponent())
             return 1
         }
-        let take = Take(job: job)
+        let take = Take(job: job, cancelFile: jobURL.appendingPathExtension("cancel"))
         return await take.run() ? 0 : 1
     }
 
@@ -62,6 +62,7 @@ private final class Take {
     private let job: RecordJob
     private let out: URL
     private let movie: URL
+    private let cancelFile: URL
     private let logFile: FileHandle?
     private let input = InputDriver()
     private var capture: CaptureLog
@@ -84,8 +85,9 @@ private final class Take {
     private static let typeDelay = 70
     private static let tick = 1.0 / 120
 
-    init(job: RecordJob) {
+    init(job: RecordJob, cancelFile: URL) {
         self.job = job
+        self.cancelFile = cancelFile
         out = URL(fileURLWithPath: job.out)
         movie = out.appendingPathComponent("raw.mov")
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
@@ -129,6 +131,7 @@ private final class Take {
     // MARK: The take
 
     private func record() async throws {
+        try checkCancel()
         for case .press(let key) in job.steps where KeyChord(key) == nil {
             throw RecorderError("I don't know the key \"\(key)\".")
         }
@@ -137,12 +140,15 @@ private final class Take {
         self.target = target
 
         log("opening \(target.name)")
+        try checkCancel()
         try await target.quitRunningCopies()
+        try checkCancel()
         try await target.launch(env: job.env)
-        try await target.waitForWindow()
+        try await target.waitForWindow(checkCancel: checkCancel)
         layout = try CaptureDirectorKit.layout(requested: CGSize(width: job.window.width, height: job.window.height),
                                                visible: Self.mainVisibleFrame())
         await target.place(layout)
+        try checkCancel()
         try checkFocus()
 
         input.move(to: screen(cursor))
@@ -180,6 +186,7 @@ private final class Take {
     }
 
     private func perform(_ step: Step) async throws {
+        try checkCancel()
         switch step {
         case .wait(let ms):
             try await pause(ms)
@@ -305,6 +312,9 @@ private final class Take {
 
     private func checkCancel() throws {
         logWatchNotes()
+        if FileManager.default.fileExists(atPath: cancelFile.path) {
+            cancelReason = "The take was stopped."
+        }
         if cancelReason == nil { cancelReason = watch.cancelReason }
         if let cancelReason { throw Cancelled(message: cancelReason) }
     }

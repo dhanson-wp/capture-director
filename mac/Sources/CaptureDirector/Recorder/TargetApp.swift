@@ -71,9 +71,10 @@ final class TargetApp {
     }
 
     /// Waits up to 15 s for the launched copy's main window.
-    func waitForWindow() async throws {
+    func waitForWindow(checkCancel: () throws -> Void) async throws {
         let deadline = Date().addingTimeInterval(15)
         while Date() < deadline {
+            try checkCancel()
             if launched?.isFinishedLaunching == true, let found = AX.mainWindow(of: pid) {
                 window = found
                 return
