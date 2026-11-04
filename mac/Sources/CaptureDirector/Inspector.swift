@@ -23,15 +23,19 @@ struct Inspector: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        switch InspectorMode.of(model.selectedEntries()) {
-        case .one(let entry):
-            SingleInspector(entry: entry).id(entry.id)
-        case .several(let entries):
-            BulkInspector(entries: entries)
-        case .none:
-            ContentUnavailableView("No selection", systemImage: "sidebar.trailing",
-                                   description: Text("Select a capture to see its details."))
+        Group {
+            switch InspectorMode.of(model.selectedEntries()) {
+            case .one(let entry):
+                SingleInspector(entry: entry).id(entry.id)
+            case .several(let entries):
+                BulkInspector(entries: entries)
+            case .none:
+                ContentUnavailableView("No selection", systemImage: "sidebar.trailing",
+                                       description: Text("Select a capture to see its details."))
+            }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("inspector")
     }
 }
 
@@ -68,6 +72,7 @@ private struct SingleInspector: View {
             Section {
                 HStack(spacing: Space.sm) {
                     TextField("Title", text: $title, prompt: Text("Title"))
+                        .accessibilityIdentifier("inspector.title")
                         .labelsHidden()
                         .font(.headline)
                         .focused($focus, equals: .title)
@@ -123,6 +128,7 @@ private struct SingleInspector: View {
                     .frame(minHeight: 64)
                     .focused($focus, equals: .notes)
                     .accessibilityLabel("Notes")
+                    .accessibilityIdentifier("inspector.notes")
             }
 
             if entry.url != nil || entry.recordAgainCommand != nil {
@@ -252,6 +258,7 @@ private struct WebCopySection: View {
                     Button("Make \(preset) copy") {
                         make(preset)
                     }
+                    .accessibilityIdentifier("inspector.copy.\(preset)")
                     .help(preset == "small" ? "Up to 1280 wide, smaller still" : "Up to 1920 wide, much smaller than a full recording")
                 }
             }

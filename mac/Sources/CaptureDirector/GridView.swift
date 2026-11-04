@@ -40,6 +40,7 @@ struct GridView: View {
                         })
                         .contextMenu { CaptureMenuItems(entries: carried) }
                         .modifier(FirstCardProbe(first: index == 0))
+                        .accessibilityIdentifier("grid.item.\(index)")
                     }
                 }
                 .padding(Space.margin)

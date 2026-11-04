@@ -26,10 +26,13 @@ struct PlayerSheet: View {
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("player.close")
             }
             .padding(Space.md)
         }
         .noInitialFocus()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player")
         .onAppear { player.play() }
         .onDisappear { player.pause() }
     }
