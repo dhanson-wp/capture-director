@@ -130,7 +130,7 @@ private final class Take {
 
     private func record() async throws {
         for case .press(let key) in job.steps where KeyChord(key) == nil {
-            throw RecorderError("\(job.id): I don't know the key \"\(key)\".")
+            throw RecorderError("I don't know the key \"\(key)\".")
         }
         if let missing = Permissions.check() { throw RecorderError(missing) }
         let target = try TargetApp(job.app)
@@ -187,6 +187,7 @@ private final class Take {
             let (point, focus) = try await locate(target)
             try await glide(to: point, ms: duration)
             try await pause(Self.settleBeforeClick)
+            try checkPointer(at: point)
             let t = now - start
             input.mouseDown(at: screen(point))
             try await pause(Self.clickHold)
@@ -204,11 +205,13 @@ private final class Take {
             try await glide(to: try await locate(target).point, ms: duration)
         case .press(let key):
             guard let chord = KeyChord(key) else { return }
+            try checkFocus()
             input.keyDown(chord)
             try await pause(Self.keyHold)
             input.keyUp(chord)
         case .type(let text):
             for character in text {
+                try checkFocus()
                 input.type(character)
                 try await pause(Self.typeDelay)
             }
@@ -229,7 +232,7 @@ private final class Take {
             }
             try? await Task.sleep(for: .milliseconds(100))
         } while Date() < deadline
-        throw RecorderError("\(job.id): nothing matches \(Self.describe(wanted)) in \(target.name).")
+        throw RecorderError("Nothing matches \(Self.describe(wanted)) in \(target.name).")
     }
 
     /// Moves the real pointer along the eased curve at 120 Hz and logs the same move for the drawn cursor.
@@ -262,6 +265,7 @@ private final class Take {
             let p = seconds > 0 ? min(1, (now - t0) / seconds) : 1
             let delta = (total * ease(p) - sent).rounded()
             if delta != 0 {
+                try checkPointer(at: cursor)
                 input.scroll(down: Int32(delta))
                 sent += delta
             }
@@ -306,8 +310,14 @@ private final class Take {
     }
 
     private func checkFocus() throws {
-        guard target?.isFrontWithKeyWindow == true else {
-            throw RecorderError("Another window took focus during the take.")
+        guard target?.isFrontWithKeyWindow == true else { throw RecorderError(InputGuard.focusLost) }
+    }
+
+    /// Stops the take before a click or scroll would land on anything but the target app.
+    private func checkPointer(at point: CGPoint) throws {
+        let hit = AX.pid(at: screen(point))
+        guard InputGuard.pointerOnTarget(hitPid: hit, targetPid: target?.pid ?? 0) else {
+            throw RecorderError(InputGuard.pointerBlocked)
         }
     }
 

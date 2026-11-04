@@ -85,8 +85,14 @@ public struct RecordJob: Codable, Sendable {
               (760...3000).contains(window.width), (480...2000).contains(window.height) else {
             throw RecordJobError("The window size must be between 760x480 and 3000x2000.")
         }
-        for key in env.keys where key.range(of: #"^[A-Z_][A-Z0-9_]*$"#, options: .regularExpression) == nil {
-            throw RecordJobError("\"\(key)\" isn't a valid environment variable name.")
+        for key in env.keys.sorted() {
+            guard key.range(of: #"^[A-Z_][A-Z0-9_]*$"#, options: .regularExpression) != nil else {
+                throw RecordJobError("\"\(key)\" isn't a valid environment variable name.")
+            }
+            // Dynamic-loader variables would load code into the target app.
+            guard !key.hasPrefix("DYLD_"), !key.hasPrefix("LD_") else {
+                throw RecordJobError("env can't set \(key); loader variables aren't allowed.")
+            }
         }
         guard fps > 0 else { throw RecordJobError("The frame rate must be above zero.") }
         guard countdown.isFinite, countdown >= 0, settle >= 0, tail >= 0 else {
@@ -181,10 +187,44 @@ public enum MoveTo: Sendable, Equatable {
     case target(Target)
 }
 
+/// A step's own zoom (Ruling M): a level, or `false` for no zoom on that event.
+/// capture.json carries it the same way, so `processShot` skips `false` events.
+public enum Zoom: Codable, Sendable, Equatable, ExpressibleByFloatLiteral, ExpressibleByIntegerLiteral {
+    case level(Double)
+    case off
+
+    public init(floatLiteral value: Double) { self = .level(value) }
+    public init(integerLiteral value: Int) { self = .level(Double(value)) }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let on = try? c.decode(Bool.self) {
+            guard !on else {
+                throw DecodingError.dataCorruptedError(in: c, debugDescription: "zoom must be a number or false.")
+            }
+            self = .off
+            return
+        }
+        let value = try c.decode(Double.self)
+        guard value.isFinite else {
+            throw DecodingError.dataCorruptedError(in: c, debugDescription: "zoom must be a number or false.")
+        }
+        self = .level(value)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .level(let value): try c.encode(value)
+        case .off: try c.encode(false)
+        }
+    }
+}
+
 public enum Step: Codable, Sendable, Equatable {
     case wait(ms: Int)
-    case click(Target, zoom: Double?, hold: Int?, duration: Int?)
-    case hover(Target, zoom: Double?, hold: Int?, duration: Int?)
+    case click(Target, zoom: Zoom?, hold: Int?, duration: Int?)
+    case hover(Target, zoom: Zoom?, hold: Int?, duration: Int?)
     case move(to: MoveTo, duration: Int?)
     case press(key: String)
     case type(text: String)
@@ -204,15 +244,21 @@ public enum Step: Codable, Sendable, Equatable {
             return t
         }
 
+        // `zoom: true` is the shot's own zoom, the same as leaving it out.
+        func zoom() throws -> Zoom? {
+            if (try? c.decode(Bool.self, forKey: .zoom)) == true { return nil }
+            return try c.decodeIfPresent(Zoom.self, forKey: .zoom)
+        }
+
         switch kind {
         case "wait":
             self = .wait(ms: try c.wholeNumber(.ms))
         case "click":
-            self = .click(try needTarget(), zoom: try c.decodeIfPresent(Double.self, forKey: .zoom),
+            self = .click(try needTarget(), zoom: try zoom(),
                           hold: try c.wholeNumberIfPresent(.hold),
                           duration: try c.wholeNumberIfPresent(.duration))
         case "hover":
-            self = .hover(try needTarget(), zoom: try c.decodeIfPresent(Double.self, forKey: .zoom),
+            self = .hover(try needTarget(), zoom: try zoom(),
                           hold: try c.wholeNumberIfPresent(.hold),
                           duration: try c.wholeNumberIfPresent(.duration))
         case "move":

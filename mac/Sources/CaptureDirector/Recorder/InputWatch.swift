@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 
 /// Watches the session's real mouse and key events during a take, so Escape or a hand on
-/// the mouse stops it. An event tap sees the original CGEvent with the posting pid
+/// the mouse (a move, a click, or a scroll) stops it. An event tap sees the original CGEvent with the posting pid
 /// (0 for hardware) and the recorder's marker; an NSEvent global monitor only sees a
 /// rebuilt copy without either, whose location isn't in screen coordinates.
 ///
@@ -25,7 +25,8 @@ nonisolated final class InputWatch: @unchecked Sendable {
         let ready = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var started = false
         let thread = Thread { [self] in
-            let types: [CGEventType] = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .keyDown]
+            let types: [CGEventType] = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
+                                        .leftMouseDown, .rightMouseDown, .scrollWheel, .keyDown]
             let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
             guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
                                               eventsOfInterest: mask, callback: Self.callback,
@@ -69,6 +70,7 @@ nonisolated final class InputWatch: @unchecked Sendable {
         switch lock.withLock({ verdict }) {
         case .escape: return "You pressed Escape, so the take stopped."
         case .userMoved: return "You moved the mouse, so the take stopped."
+        case .userPointer: return "You clicked or scrolled, so the take stopped."
         default: return nil
         }
     }
@@ -99,14 +101,16 @@ nonisolated final class InputWatch: @unchecked Sendable {
         let sourcePid = event.getIntegerValueField(.eventSourceUnixProcessID)
         let userData = event.getIntegerValueField(.eventSourceUserData)
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let isButtonOrScroll = type == .leftMouseDown || type == .rightMouseDown || type == .scrollWheel
         let judged = judgeInput(isKey: isKey, keyCode: keyCode, sourcePid: sourcePid, userData: userData,
-                                selfPid: selfPid, marker: InputDriver.marker)
+                                selfPid: selfPid, marker: InputDriver.marker, isButtonOrScroll: isButtonOrScroll)
         let p = event.location
-        let note = "\(isKey ? "key \(keyCode)" : "pointer") from pid \(sourcePid) (ours is \(selfPid)), "
+        let kind = isKey ? "key \(keyCode)" : isButtonOrScroll ? (type == .scrollWheel ? "scroll" : "click") : "pointer"
+        let note = "\(kind) from pid \(sourcePid) (ours is \(selfPid)), "
             + "marker \(userData) (ours is \(InputDriver.marker)), at \(Int(p.x.rounded())),\(Int(p.y.rounded())), judged \(judged)"
         lock.withLock {
             if firstEvent == nil { firstEvent = note }
-            if verdict == nil, judged == .escape || judged == .userMoved {
+            if verdict == nil, judged == .escape || judged == .userMoved || judged == .userPointer {
                 verdict = judged
                 cancelEvent = note
             }

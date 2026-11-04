@@ -35,6 +35,18 @@ import Testing
     #expect(moves[0] == ["t0": 0.5, "t1": 1.4, "x0": 1190.4, "y0": 777.6, "x1": 300, "y1": 200])
 }
 
+@Test func captureLogWritesZoomFalseForNoZoomEvents() throws {
+    var log = CaptureLog(cursorStart: [0, 0])
+    log.click(t: 1, released: 1.1, x: 10, y: 20, zoom: .off)
+    log.hover(t: 2, x: 30, y: 40, zoom: .level(2))
+    let text = try #require(String(data: try log.json(duration: 3, source: "raw.mov"), encoding: .utf8))
+    #expect(text.contains(#""zoom" : false"#))
+    let obj = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+    let events = try #require(obj["events"] as? [[String: Any]])
+    #expect(events[0]["zoom"] as? Bool == false)
+    #expect(events[1]["zoom"] as? Double == 2)
+}
+
 @Test func captureLogThrowsOnNonFiniteNumbersInsteadOfCrashing() {
     var log = CaptureLog(cursorStart: [0, 0])
     log.hover(t: .nan, x: 1, y: 1)

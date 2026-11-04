@@ -92,6 +92,18 @@ enum AX {
         return element(app, kAXFocusedWindowAttribute)
     }
 
+    /// The pid of the app that owns whatever is on screen at a point (global, top-left origin), if anything.
+    static func pid(at point: CGPoint) -> pid_t? {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.5)
+        var element: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &element) == .success,
+              let element else { return nil }
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(element, &pid) == .success else { return nil }
+        return pid
+    }
+
     /// Brings the app and the window to the front.
     static func raise(_ window: AXUIElement, of pid: pid_t) {
         let app = AXUIElementCreateApplication(pid)

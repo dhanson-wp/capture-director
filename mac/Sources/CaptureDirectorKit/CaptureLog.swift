@@ -20,7 +20,7 @@ public struct CaptureLog: Sendable {
         var t: Double
         var x: Double
         var y: Double
-        var zoom: Double?
+        var zoom: Zoom?
         var focus: Box?
     }
 
@@ -40,12 +40,12 @@ public struct CaptureLog: Sendable {
     }
 
     /// A click at `t`, with the button released at `released`.
-    public mutating func click(t: Double, released: Double, x: Double, y: Double, zoom: Double? = nil, focus: Box? = nil) {
+    public mutating func click(t: Double, released: Double, x: Double, y: Double, zoom: Zoom? = nil, focus: Box? = nil) {
         events.append(Event(type: "click", t: t, x: x, y: y, zoom: zoom, focus: focus))
         presses.append(Press(t0: t, t1: released + Self.pressTail))
     }
 
-    public mutating func hover(t: Double, x: Double, y: Double, zoom: Double? = nil, focus: Box? = nil) {
+    public mutating func hover(t: Double, x: Double, y: Double, zoom: Zoom? = nil, focus: Box? = nil) {
         events.append(Event(type: "hover", t: t, x: x, y: y, zoom: zoom, focus: focus))
     }
 

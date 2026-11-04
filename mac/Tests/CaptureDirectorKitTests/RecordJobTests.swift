@@ -54,6 +54,35 @@ private func load(_ data: Data) throws -> RecordJob {
     #expect(throws: RecordJobError.self) { try load(jobJSON(env: #"{"bad-name":"x"}"#)) }
 }
 
+@Test func envRefusesLoaderVariables() {
+    func message(_ env: String) -> String {
+        do { _ = try load(jobJSON(env: env)); return "" } catch { return error.localizedDescription }
+    }
+    #expect(message(#"{"DYLD_INSERT_LIBRARIES":"/tmp/x.dylib"}"#) == "env can't set DYLD_INSERT_LIBRARIES; loader variables aren't allowed.")
+    #expect(message(#"{"LD_LIBRARY_PATH":"/tmp"}"#) == "env can't set LD_LIBRARY_PATH; loader variables aren't allowed.")
+    #expect(message(#"{"OLD_DYLD":"x"}"#) == "")
+}
+
+@Test func stepZoomIsANumberOrFalse() throws {
+    let job = try load(jobJSON(steps: #"[{"kind":"click","id":"a","zoom":false},{"kind":"hover","id":"b","zoom":2},{"kind":"click","id":"c","zoom":true},{"kind":"hover","id":"d","zoom":1.5}]"#))
+    #expect(job.steps == [
+        .click(.id("a"), zoom: .off, hold: nil, duration: nil),
+        .hover(.id("b"), zoom: .level(2), hold: nil, duration: nil),
+        .click(.id("c"), zoom: nil, hold: nil, duration: nil),
+        .hover(.id("d"), zoom: .level(1.5), hold: nil, duration: nil),
+    ])
+    #expect(throws: RecordJobError.self) { try load(jobJSON(steps: #"[{"kind":"click","id":"a","zoom":"big"}]"#)) }
+}
+
+@Test func stepZoomRoundTrips() throws {
+    let steps: [Step] = [.click(.id("a"), zoom: .off, hold: nil, duration: nil), .hover(.id("b"), zoom: .level(1.7), hold: nil, duration: nil)]
+    let data = try JSONEncoder().encode(steps)
+    let raw = try #require(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+    #expect(raw[0]["zoom"] as? Bool == false)
+    #expect(raw[1]["zoom"] as? Double == 1.7)
+    #expect(try JSONDecoder().decode([Step].self, from: data) == steps)
+}
+
 @Test func unknownStepAndTargetlessClickSayWhy() {
     func message(_ steps: String) -> String {
         do { _ = try load(jobJSON(steps: steps)); return "" } catch { return error.localizedDescription }
