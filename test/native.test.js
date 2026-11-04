@@ -3,11 +3,10 @@ import assert from 'node:assert/strict';
 import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { buildJob, findRecorderApp, recordAppShot } from '../src/native.js';
-import { loadShots, record } from '../src/shots.js';
+import { buildJob, findRecorderApp, recordAppShot, tidyLine } from '../src/native.js';
+import { loadShots, record, stoppedLine } from '../src/shots.js';
 
 const BUNDLE = 'io.github.dhanson-wp.capture-director';
-const mac = process.platform === 'darwin';
 
 // A pretend Capture Director.app, so nothing real is ever launched.
 async function fakeApp() {
@@ -87,14 +86,43 @@ test('a missing result.json fails plainly', async () => {
 	await assert.rejects(recordAppShot(shot, out, { env: { CD_APP: await fakeApp() }, run: fakeRun(null) }), /The recorder stopped without saying why\./);
 });
 
-test('a cancelled take is reported, not processed', { skip: !mac }, async () => {
+test('a cancelled take is reported, not processed', async () => {
 	const { file, out } = await project();
-	const results = await record(file, { env: { CD_APP: await fakeApp() }, run: fakeRun({ status: 'cancelled' }) });
+	const results = await record(file, { platform: 'darwin', env: { CD_APP: await fakeApp() }, run: fakeRun({ status: 'cancelled' }) });
 	assert.deepEqual(results, [{ id: 'tour', cancelled: true }]);
 	await assert.rejects(access(path.join(out, 'tour.mp4')));
+	assert.equal(stoppedLine(results), 'The run stopped at tour. The take was cancelled.');
 });
 
-test('a recorder error becomes the command error', { skip: !mac }, async () => {
+test('a cancelled take stops the run before the next shot', async () => {
+	const dir = await mkdtemp(`${tmpdir()}/cd-native-shots-`);
+	const file = path.join(dir, 'shots.yml');
+	await writeFile(file, `shots:\n  - id: one\n    app: ${BUNDLE}\n    actions: [500]\n  - id: two\n    app: ${BUNDLE}\n    actions: [500]\n`);
+	const launched = [];
+	const run = async (args) => {
+		launched.push(path.basename(path.dirname(args.jobFile)));
+		await fakeRun({ status: 'cancelled', message: 'You pressed Escape, so the take stopped.' })(args);
+	};
+	const results = await record(file, { platform: 'darwin', env: { CD_APP: await fakeApp() }, run });
+	assert.deepEqual(launched, ['one']);
+	assert.deepEqual(results, [{ id: 'one', cancelled: true, message: 'You pressed Escape, so the take stopped.' }]);
+	assert.equal(stoppedLine(results), 'The run stopped at one. You pressed Escape, so the take stopped.');
+	assert.equal(stoppedLine([{ id: 'one', file: 'x.mp4' }]), null);
+});
+
+test('a recorder error becomes the command error', async () => {
 	const { file } = await project();
-	await assert.rejects(record(file, { env: { CD_APP: await fakeApp() }, run: fakeRun({ status: 'error', message: 'The app never opened a window.' }) }), /The app never opened a window\./);
+	await assert.rejects(record(file, { platform: 'darwin', env: { CD_APP: await fakeApp() }, run: fakeRun({ status: 'error', message: 'The app never opened a window.' }) }), /^Error: tour: The app never opened a window\.$/);
+});
+
+test('app shots only record on macOS', async () => {
+	const { file } = await project();
+	let launched = false;
+	await assert.rejects(record(file, { platform: 'linux', env: { CD_APP: await fakeApp() }, run: async () => { launched = true; } }), /^Error: Recording Mac apps only works on macOS\.$/);
+	assert.equal(launched, false);
+});
+
+test('recorder log lines carry the shot id once', () => {
+	assert.equal(tidyLine('[capture-director] tour: opening Notes', 'tour'), 'tour: opening Notes');
+	assert.equal(tidyLine('plain line', 'tour'), 'tour: plain line');
 });

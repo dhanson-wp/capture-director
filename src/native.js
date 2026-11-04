@@ -65,6 +65,12 @@ function spawnOpen({ app, jobFile }) {
 	});
 }
 
+// The recorder already writes "[capture-director] <id>: "; log adds the first part, so keep the id once.
+export function tidyLine(line, id) {
+	const text = line.replace(/^\[capture-director\] /, '');
+	return text.startsWith(`${id}: `) ? text : `${id}: ${text}`;
+}
+
 // Print recorder.log lines to stderr as they appear.
 function followLog(file, id) {
 	let offset = 0;
@@ -87,7 +93,7 @@ function followLog(file, id) {
 		}
 		const lines = partial.split('\n');
 		partial = final ? '' : lines.pop();
-		for (const line of final ? lines.concat(partial) : lines) if (line.trim()) log(`${id}: ${line}`);
+		for (const line of final ? lines.concat(partial) : lines) if (line.trim()) log(tidyLine(line, id));
 	};
 	let busy = Promise.resolve();
 	const timer = setInterval(() => { busy = busy.then(() => flush(false)); }, POLL_MS);

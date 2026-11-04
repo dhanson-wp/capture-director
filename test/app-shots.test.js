@@ -70,6 +70,13 @@ test('env must be plain strings with plain names', async () => {
 	assert.deepEqual(shots[0].env, { CD_HOME: '/tmp/x' });
 });
 
+test("env can't set dynamic-loader variables", async () => {
+	await assert.rejects(load(`app: ${BUNDLE}\nenv: { DYLD_INSERT_LIBRARIES: /tmp/x.dylib }`), /^Error: Shot shot-1: env can't set DYLD_INSERT_LIBRARIES; loader variables aren't allowed\.$/);
+	await assert.rejects(load(`app: ${BUNDLE}\nenv: { LD_LIBRARY_PATH: /tmp }`), /env can't set LD_LIBRARY_PATH; loader variables aren't allowed\./);
+	const { shots } = await load(`app: ${BUNDLE}\nenv: { OLD_DYLD: x }`);
+	assert.deepEqual(shots[0].env, { OLD_DYLD: 'x' });
+});
+
 test('relative env values resolve from the YAML file, others pass verbatim', async () => {
 	const { dir, shots } = await load(`app: ${BUNDLE}\nenv: { A: ./data, B: ../up, C: plain, D: "~/x" }`);
 	assert.deepEqual(shots[0].env, { A: path.join(dir, 'data'), B: path.resolve(dir, '../up'), C: 'plain', D: '~/x' });
@@ -143,4 +150,8 @@ test('processShot reads a video source', async () => {
 test('source must be a plain file name', async () => {
 	const { dir, shot } = await videoShot('../x.mov', { makeVideo: false });
 	await assert.rejects(processShot(null, shot, dir), /source must be a plain file name/);
+	for (const source of ['.', '..']) {
+		const bad = await videoShot(source, { makeVideo: false });
+		await assert.rejects(processShot(null, bad.shot, bad.dir), /source must be a plain file name/);
+	}
 });

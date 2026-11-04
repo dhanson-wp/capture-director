@@ -30,6 +30,8 @@ const WEB_ONLY = ['scale', 'hideScrollbars', 'setup', 'viewport', 'css', 'hide',
 const APP_STEPS = ['wait', 'click', 'hover', 'move', 'press', 'type', 'scroll'];
 const BUNDLE_ID = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
+// Dynamic-loader variables would load code into the target app.
+const LOADER_ENV = /^(DYLD_|LD_)/;
 const WINDOW_MIN = { width: 760, height: 480 };
 const WINDOW_MAX = { width: 3000, height: 2000 };
 
@@ -51,6 +53,7 @@ function appEnv(env, file, id) {
 	const out = {};
 	for (const [k, v] of Object.entries(env)) {
 		if (!ENV_NAME.test(k)) throw new Error(`Shot ${id}: env name "${k}" must be capital letters, digits, and underscores`);
+		if (LOADER_ENV.test(k)) throw new Error(`Shot ${id}: env can't set ${k}; loader variables aren't allowed.`);
 		if (typeof v !== 'string' || v.includes('\0')) throw new Error(`Shot ${id}: env ${k} must be a string`);
 		// ./ and ../ mean "next to the YAML file"; anything else goes through as written.
 		out[k] = /^\.\.?\//.test(v) ? path.resolve(path.dirname(file), v) : v;
@@ -117,21 +120,29 @@ function pick(shots, only) {
 	return picked;
 }
 
-export async function record(file, { only, run, env } = {}) {
+/** The stderr line for a run a cancelled take stopped, or null when nothing was cancelled. */
+export function stoppedLine(results) {
+	const stopped = results.find((r) => r.cancelled);
+	if (!stopped) return null;
+	return `The run stopped at ${stopped.id}. ${stopped.message || 'The take was cancelled.'}`;
+}
+
+export async function record(file, { only, run, env, platform = process.platform } = {}) {
 	const { outDir, shots } = await loadShots(file);
 	const picked = pick(shots, only);
-	if (process.platform !== 'darwin' && picked.some((s) => s.kind === 'app')) throw new Error('Recording Mac apps only works on macOS.');
+	if (platform !== 'darwin' && picked.some((s) => s.kind === 'app')) throw new Error('Recording Mac apps only works on macOS.');
 	const results = [];
 	for (const shot of picked) {
 		const dir = path.join(outDir, shot.id);
 		await mkdir(dir, { recursive: true });
 		if (shot.kind === 'app') {
 			const result = await recordAppShot(shot, dir, { run, env });
+			// A cancelled take stops the whole run; the person at the Mac wants it back.
 			if (result.status === 'cancelled') {
-				results.push({ id: shot.id, cancelled: true });
-				continue;
+				results.push({ id: shot.id, cancelled: true, ...(result.message ? { message: result.message } : {}) });
+				break;
 			}
-			if (result.status === 'error') throw new Error(result.message || 'The recorder failed.');
+			if (result.status === 'error') throw new Error(`${shot.id}: ${result.message || 'The recorder failed.'}`);
 		} else {
 			await withBrowser((browser) => recordShot(browser, shot, dir), { scale: shot.scale });
 		}
@@ -159,7 +170,7 @@ export async function processShot(browser, shot, dir) {
 	// capture.json lands in the filter graph, so check it as carefully as the YAML.
 	cap.duration = finite(cap.duration, `${shot.id} capture duration`, { min: 0 });
 	// App shots carry a recorded video; web shots carry a frame list.
-	if (cap.source !== undefined && !(typeof cap.source === 'string' && /^[\w.-]+$/.test(cap.source))) {
+	if (cap.source !== undefined && !(typeof cap.source === 'string' && /^(?!\.\.?$)[\w.-]+$/.test(cap.source))) {
 		throw new Error(`${shot.id}: source must be a plain file name`);
 	}
 	const video = cap.source ? path.join(dir, cap.source) : null;
