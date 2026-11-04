@@ -1,0 +1,20 @@
+# Assemble the Mac app tour: a title card, the clip, and an end card.
+output: out/mac-app-tour.mp4
+size: 1920x1080
+fps: 30
+
+card: { background: "#321025", color: "#f2efe9" }
+caption: { position: bottom-left, size: 28, opacity: 1, color: "#321025", plate: "#f2efe9" }
+transition: { type: fade, duration: 0.6 }
+fade: { in: 0.5, out: 1.0 }
+
+items:
+  - card:
+      kicker: Capture Director for Mac
+      title: Every capture, in one place
+      duration: 2.5
+  - clip: out/tour/tour.mp4
+    caption: Browse, play, and organize your captures
+  - end:
+      title: Capture Director
+      duration: 3
