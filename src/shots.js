@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 import { normalizeStep, recordShot, withBrowser } from './record.js';
 import { remember } from './library.js';
+import { recordAppShot } from './native.js';
 import { renderCursor } from './browser.js';
 import { zoomPlan, zoomFilter, cursorExprs, pressedEnable, ZOOM_DEFAULTS } from './effects.js';
 import { ffmpeg, finite, hexColor, loadYaml, log, merge, parseSize, probe, resolveFrom, safeId } from './util.js';
@@ -116,13 +117,24 @@ function pick(shots, only) {
 	return picked;
 }
 
-export async function record(file, { only } = {}) {
+export async function record(file, { only, run, env } = {}) {
 	const { outDir, shots } = await loadShots(file);
+	const picked = pick(shots, only);
+	if (process.platform !== 'darwin' && picked.some((s) => s.kind === 'app')) throw new Error('Recording Mac apps only works on macOS.');
 	const results = [];
-	for (const shot of pick(shots, only)) {
+	for (const shot of picked) {
 		const dir = path.join(outDir, shot.id);
 		await mkdir(dir, { recursive: true });
-		await withBrowser((browser) => recordShot(browser, shot, dir), { scale: shot.scale });
+		if (shot.kind === 'app') {
+			const result = await recordAppShot(shot, dir, { run, env });
+			if (result.status === 'cancelled') {
+				results.push({ id: shot.id, cancelled: true });
+				continue;
+			}
+			if (result.status === 'error') throw new Error(result.message || 'The recorder failed.');
+		} else {
+			await withBrowser((browser) => recordShot(browser, shot, dir), { scale: shot.scale });
+		}
 		results.push(await withBrowser((browser) => processShot(browser, shot, dir)));
 	}
 	return results;
