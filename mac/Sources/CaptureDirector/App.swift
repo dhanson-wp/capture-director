@@ -6,6 +6,7 @@ import SwiftUI
 //   CaptureDirector                      the app
 //   APP_SNAPSHOT=<dir> CaptureDirector   save a PNG of every main window page in light and dark mode, then quit
 //   CaptureDirector --selftest           run the self-test on a scratch library and quit with 0 or 1 (tools/selftest.sh)
+//   CaptureDirector --record <job.json>  record a Mac app shot with no window or Dock icon, then quit (Recorder/RecordMode.swift)
 //   APP_GRID=1 CaptureDirector           draw the 8 pt grid and the layout probes over the window
 
 @main
@@ -22,6 +23,9 @@ struct CaptureDirectorApp: App {
                 .frame(minWidth: 760, minHeight: 480)
         }
         .defaultSize(width: 1100, height: 720)
+        // Record mode never shows a window, not even a restored one.
+        .defaultLaunchBehavior(RecordMode.requested ? .suppressed : .automatic)
+        .restorationBehavior(RecordMode.requested ? .disabled : .automatic)
         .windowToolbarStyle(.unified)
         .commands {
             SidebarCommands()
@@ -109,6 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowDefaults: DefaultsGuard?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        if RecordMode.requested {
+            // No Dock icon and no menu bar of our own while recording another app.
+            NSApp.setActivationPolicy(.accessory)
+            return
+        }
         if SelfTest.requested || Snapshot.requested {
             windowDefaults = DefaultsGuard(.standard, prefixes: ["NSWindow Frame", "NSSplitView Subview Frames",
                                                                  "NSToolbar Configuration"])
@@ -116,12 +125,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if RecordMode.requested {
+            for window in NSApp.windows { window.close() }
+            Task { exit(await RecordMode.run()) }
+            return
+        }
         // Started from a terminal, the process is not a foreground app yet.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !RecordMode.requested }
 
     /// The self-test's result becomes the exit code, after a normal quit.
     func applicationWillTerminate(_ notification: Notification) {
