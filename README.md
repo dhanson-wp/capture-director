@@ -13,6 +13,7 @@ Here's what it made from one shot list and one timeline: a 31 second tour of the
 - macOS (it's only been tested there so far)
 - Node 20 or newer
 - Google Chrome (it drives the installed Chrome through Playwright, so there's no browser download)
+- To record a Mac app, the Mac app installed (see below) and macOS 26 or later
 - ffmpeg with libx264 (`brew install ffmpeg`)
 
 ```bash
@@ -72,6 +73,84 @@ Selectors are Playwright selectors, so CSS (`.menu a`), text (`text=Writing`), a
 
 When a click changes something far from the button, add `zoomOn: [buttonSelector, changedSelector]`. The zoom then frames the box around both, instead of cropping out the thing that changed.
 
+## Recording a Mac app
+
+Websites aren't the only thing I want to film. Capture director can also record a native Mac app: it opens the app, drives it with the real mouse and keyboard, and hands back the same polished clip. It records only the app's windows, centered on a solid color, so the Dock, menu bar, wallpaper, and your other apps never show up.
+
+It needs the Mac app (`capture-director install-app`), because the recorder lives inside it. Use `app:` in place of `url:`, with a bundle ID or the path to a `.app`:
+
+```yaml
+out: out
+
+shots:
+  - id: tour
+    app: io.github.dhanson-wp.capture-director
+    env:
+      CD_HOME: /tmp/capture-director-tour-home   # environment for the app
+    window: { width: 1440, height: 900 }         # the default; shrinks to fit your display
+    background: "#4c1637"                        # the default
+    countdown: 3                                 # seconds before the take starts; the default
+    zoom: { on: [hover] }
+    actions:
+      - wait: 1200
+      - hover: { id: sidebar.folder.Blog, zoom: 1.5, hold: 700 }
+      - click: { id: sidebar.starred, hold: 900 }
+      - click: { id: grid.item.0, hold: 500 }
+      - press: cmd+o
+      - wait: 3000
+      - press: ctrl+cmd+i
+```
+
+The full tour is in `examples/mac-app-tour/`. `make-demo-library.sh` fills a scratch library so the app has something to show, and `env` points the app at it, so the tour never touches `~/.capture-director`. Relative `env` values that start with `./` or `../` resolve from the YAML file's folder.
+
+The app is recorded at 3840x2160 on the solid color, and then the usual zoom and cursor step turns that into a 1080p clip. The window is about 80 percent of the frame width, with its macOS shadow.
+
+### Steps and targets
+
+The steps that work on an app shot are `wait`, `click`, `hover`, `move`, `press`, `type`, and `scroll`. `press` takes a key with modifiers, like `cmd+o` or `ctrl+cmd+i`. `move` takes a point in the 1920x1080 frame (the same space as the coordinates in `capture.json`) or a target.
+
+A target is how a step finds a control through the app's accessibility tree. Use whichever fits:
+
+```yaml
+- click: { id: sidebar.starred }                 # accessibility identifier
+- click: { role: button, label: "Add folder" }   # role plus label
+- click: "Add folder"                            # a bare label, any role
+```
+
+An `id` is the sturdiest, since it doesn't change with the app's wording. If you build the app yourself, set the accessibility identifier on the controls you plan to film.
+
+Shot options that only make sense for a web page (`scale`, `hideScrollbars`, `setup`, `viewport`, `css`, `hide`, and `waitUntil`) are rejected on an app shot, by name. Per-step `zoom: false` isn't supported on app shots yet. To zoom only on hovers and leave clicks at full frame, set `zoom: { on: [hover] }` on the shot, as the tour does.
+
+One tip for the Capture Director tour: the inspector starts hidden, so the tour presses Control-Command-I to show it.
+
+### Permissions
+
+macOS asks for two permissions, and both go to Capture Director, not to Terminal or your agent:
+
+- **Screen Recording**, to capture the app's windows.
+- **Accessibility**, to find controls and to move the mouse and press keys.
+
+The first take asks for Screen Recording, and the next asks for Accessibility. Allow each in System Settings, then record again.
+
+The app is ad-hoc signed, so every rebuild or reinstall changes its signature. macOS then quietly stops honoring the old grant, even though the switch still looks on. If a take stalls on a permission you already gave, reset both and allow the prompts again:
+
+```bash
+tccutil reset ScreenCapture io.github.dhanson-wp.capture-director
+tccutil reset Accessibility io.github.dhanson-wp.capture-director
+```
+
+Keep one copy of the app installed. Two copies with the same app ID confuse the permission list. `CD_APP` points the CLI at a specific copy if you need to.
+
+### During a take
+
+The take drives your real mouse and keyboard, so keep your hands off. Moving the mouse or pressing Escape cancels it cleanly, and no clip is written. Each shot folder gets a `recorder.log` that says what stopped a take, which is the first place to look when one ends early.
+
+If the app is already open with unsaved work, the take asks you to quit it first. It won't force-quit anything.
+
+Agents running in a sandboxed shell are fine: the CLI starts the recorder through LaunchServices (`open`), which works from a sandbox. Launching the app's binary directly from a sandboxed shell can hang, so don't.
+
+Recording Mac apps only works on macOS, and it records the main display.
+
 ## Shot list reference
 
 Top level: `out` (folder for captures, relative to the YAML file), `project` (the library project; defaults to the YAML file's folder name), `defaults` (merged into every shot), and `shots`.
@@ -81,7 +160,8 @@ Per shot, or in `defaults`:
 | Key | Default | What it does |
 |---|---|---|
 | `id` | `shot-N` | Folder and file name. Letters, numbers, dots, dashes, and underscores |
-| `url` | | Page to record (`http` or `https`) |
+| `url` | | Page to record (`http` or `https`). A shot has `url` or `app`, never both |
+| `app` | | Mac app to record instead; see [Recording a Mac app](#recording-a-mac-app) |
 | `viewport` | `{ width: 1440, height: 810 }` | CSS viewport |
 | `scale` | `1.3333333` | Device scale factor; output is viewport x scale. Use `2` for crisper zooms |
 | `output` | `1920x1080` | Final clip size |
@@ -94,6 +174,8 @@ Per shot, or in `defaults`:
 | `colorScheme` | | `light` or `dark` |
 | `waitUntil` | `networkidle` | Page load condition |
 | `hideWpBars` | `true` | Hides the WordPress admin bar and the `#atomic-proxy-bar`, which some WordPress.com setups show even to logged-out visitors, on every page the shot visits |
+
+Mac app shots also take `env`, `window`, `background`, and `countdown`, described in the section above.
 
 Zoom settings: `level` (1.6), `max` (2.0), `on` (`[click, hover]`), `lead` (0.25 s; how early the zoom finishes before the click), `ramp` (0.9 s in), `rampOut` (1.0 s out), `hold` (1.4 s after the last click before zooming out), `pan` (0.7 s between clicks in one zoom), `gap` (0.6 s; zooms closer than this merge into one), and `padding` (0.12, around a `zoomOn` box). Clicks that land close together stay zoomed in and pan between targets, which is how Screen Studio feels.
 
@@ -239,10 +321,11 @@ For a more designed piece, such as kinetic type, animated end cards, or motion g
 ## Safety and privacy
 
 - **Everything runs on your machine.** There's no server you don't run, no account, and no telemetry. Nothing is uploaded.
+- **Recording a Mac app is the one time it drives your real mouse and keyboard.** That's why macOS makes you grant Screen Recording and Accessibility to Capture Director. It captures only the target app's windows, never the rest of your screen, and moving the mouse or pressing Escape stops it.
 - **The browser starts logged out every time.** Each shot gets a fresh, empty Chrome profile, with no cookies, saved passwords, or extensions from your own browser. You can't accidentally record your admin bar or inbox.
 - **Chrome keeps its sandbox on.** Playwright turns Chrome's sandbox off by default; capture director turns it back on, since it's visiting websites you don't control. Downloads are refused. (`CD_NO_SANDBOX=1` is there for containers that can't run it.)
 - **Network traffic goes only where you point it:** the URLs in your shot list, plus any font URLs in your timeline. Shot URLs must be `http` or `https`, and clips and music must be local files, so ffmpeg never fetches anything.
-- **A shot list is a script.** The `eval` and `css` steps run code inside the page you're recording, and file paths read local files (fonts, music, clips). Read a shot list from someone else before you run it, the same way you'd read a shell script. Within that, the YAML can't reach outside what it describes: values that end up in ffmpeg filter graphs must be plain numbers or known names, shot ids must be plain names, outputs need a video extension, and re-recording only clears the frame files it wrote.
+- **A shot list is a script.** The `eval` and `css` steps run code inside the page you're recording, an `app` shot launches an app and presses keys in it, and file paths read local files (fonts, music, clips). Read a shot list from someone else before you run it, the same way you'd read a shell script. Within that, the YAML can't reach outside what it describes: values that end up in ffmpeg filter graphs must be plain numbers or known names, shot ids must be plain names, outputs need a video extension, and re-recording only clears the frame files it wrote.
 - **The library stays on your machine.** `capture-director library` listens on `127.0.0.1` only, answers only to its own address, and needs the one-time link printed in your terminal. It can't be reached from your network or driven by other websites, and it never deletes a file.
 - **Two dependencies:** `playwright-core` (it drives your installed Chrome, with no browser download) and `yaml`. `npm audit` reports no known vulnerabilities.
 - **Mind what's on the page.** It records exactly what a logged-out visitor sees. Don't record staging sites or pages with personal data you wouldn't publish.
@@ -256,10 +339,11 @@ Videos made with it have no voiceover, so they read fine on mute. Captions are d
 ## Tests
 
 ```bash
-npm test
+npm test            # the CLI
+mac/tools/test.sh   # the Mac app's unit tests
 ```
 
-The tests cover the zoom planner, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules. GitHub Actions runs them on Node 20 and 22 for every pull request and every push to `main`.
+The tests cover the zoom planner, app shot parsing,, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules. The Mac app has its own Swift tests. GitHub Actions runs them on Node 20 and 22 for every pull request and every push to `main`.
 
 ## License
 
