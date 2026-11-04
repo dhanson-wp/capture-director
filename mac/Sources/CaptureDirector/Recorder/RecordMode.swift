@@ -67,14 +67,14 @@ private final class Take {
     private var capture: CaptureLog
     private var target: TargetApp?
     private var recorder: ScreenRecorder?
-    private var monitor: Any?
+    private let watch = InputWatch()
+    private var watching = false
     private var layout = FrameLayout(windowSize: .zero, windowOrigin: .zero, sourceRect: CGRect(x: 0, y: 0, width: 1920, height: 1080))
     /// Host time of the first frame: zero for every time in capture.json.
     private var start: Double = 0
     /// Where the pointer is, in 1920x1080 frame space.
     private var cursor: CGPoint
     private var cancelReason: String?
-    private var reportedFirstEvent = false
     private var signalSources: [DispatchSourceSignal] = []
     private var awake: IOPMAssertionID = 0
 
@@ -146,7 +146,7 @@ private final class Take {
         try checkFocus()
 
         input.move(to: screen(cursor))
-        startWatching()
+        try startWatching()
         try await pause(job.settle)
         var left = job.countdown
         while left > 0 {
@@ -273,30 +273,11 @@ private final class Take {
     // MARK: Watching for the person at the Mac
 
     /// Escape, or any pointer movement the recorder didn't make, stops the take.
-    private func startWatching() {
-        monitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .keyDown]
-        ) { [weak self] event in
-            self?.noticed(event)
+    private func startWatching() throws {
+        guard watch.start() else {
+            throw RecorderError("I couldn't watch the mouse and keyboard, so I can't record safely. Check Accessibility permission for Capture Director.")
         }
-    }
-
-    private func noticed(_ event: NSEvent) {
-        guard cancelReason == nil else { return }
-        let cg = event.cgEvent
-        if !reportedFirstEvent {
-            reportedFirstEvent = true
-            let marker = cg.map { String($0.getIntegerValueField(.eventSourceUserData)) } ?? "none"
-            log("first input event seen: cgEvent \(cg == nil ? "nil" : "present"), marker \(marker) (ours is \(InputDriver.marker))")
-        }
-        let isKey = event.type == .keyDown
-        if input.posted(cg, location: cg?.location ?? Self.topLeft(NSEvent.mouseLocation),
-                        keyCode: isKey ? CGKeyCode(event.keyCode) : nil) { return }
-        if isKey {
-            if event.keyCode == 53 { cancelReason = "You pressed Escape, so the take stopped." }
-        } else {
-            cancelReason = "You moved the mouse, so the take stopped."
-        }
+        watching = true
     }
 
     /// SIGTERM or SIGINT cancels the take, so cleanup still runs and result.json is written.
@@ -315,6 +296,8 @@ private final class Take {
     }
 
     private func checkCancel() throws {
+        if let note = watch.takeFirstEventNote() { log(note) }
+        if cancelReason == nil { cancelReason = watch.cancelReason }
         if let cancelReason { throw Cancelled(message: cancelReason) }
     }
 
@@ -339,8 +322,8 @@ private final class Take {
 
     private func cleanUp(ok: Bool) async {
         input.releaseAll()
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
+        if watching { watch.stop() }
+        watching = false
         if let recorder {
             await recorder.stop()
             if !ok { recorder.cancel() }
@@ -366,11 +349,6 @@ private final class Take {
         let line = Data("[capture-director] \(job.id): \(text)\n".utf8)
         logFile?.write(line)
         FileHandle.standardError.write(line)
-    }
-
-    /// A Cocoa screen point (bottom-left origin) in global points with a top-left origin.
-    private static func topLeft(_ p: CGPoint) -> CGPoint {
-        CGPoint(x: p.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - p.y)
     }
 
     /// The main display's area outside the menu bar and Dock, in global points with a top-left origin.
