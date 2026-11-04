@@ -74,6 +74,8 @@ private final class Take {
     /// Where the pointer is, in 1920x1080 frame space.
     private var cursor: CGPoint
     private var cancelReason: String?
+    private var reportedFirstEvent = false
+    private var signalSources: [DispatchSourceSignal] = []
     private var awake: IOPMAssertionID = 0
 
     private static let settleBeforeClick = 140
@@ -101,6 +103,7 @@ private final class Take {
 
     /// Returns true when the take is ok.
     func run() async -> Bool {
+        watchSignals()
         IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
                                     IOPMAssertionLevel(kIOPMAssertionLevelOn), "Recording" as CFString, &awake)
         let status: String
@@ -134,7 +137,7 @@ private final class Take {
         self.target = target
 
         log("opening \(target.name)")
-        await target.quitRunningCopies()
+        try await target.quitRunningCopies()
         try await target.launch(env: job.env)
         try await target.waitForWindow()
         layout = try CaptureDirectorKit.layout(requested: CGSize(width: job.window.width, height: job.window.height),
@@ -279,11 +282,35 @@ private final class Take {
     }
 
     private func noticed(_ event: NSEvent) {
-        guard cancelReason == nil, let cg = event.cgEvent, !input.posted(cg) else { return }
-        if event.type == .keyDown {
+        guard cancelReason == nil else { return }
+        let cg = event.cgEvent
+        if !reportedFirstEvent {
+            reportedFirstEvent = true
+            let marker = cg.map { String($0.getIntegerValueField(.eventSourceUserData)) } ?? "none"
+            log("first input event seen: cgEvent \(cg == nil ? "nil" : "present"), marker \(marker) (ours is \(InputDriver.marker))")
+        }
+        let isKey = event.type == .keyDown
+        if input.posted(cg, location: cg?.location ?? Self.topLeft(NSEvent.mouseLocation),
+                        keyCode: isKey ? CGKeyCode(event.keyCode) : nil) { return }
+        if isKey {
             if event.keyCode == 53 { cancelReason = "You pressed Escape, so the take stopped." }
         } else {
             cancelReason = "You moved the mouse, so the take stopped."
+        }
+    }
+
+    /// SIGTERM or SIGINT cancels the take, so cleanup still runs and result.json is written.
+    private func watchSignals() {
+        for number in [SIGTERM, SIGINT] {
+            signal(number, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+            source.setEventHandler { [weak self] in
+                MainActor.assumeIsolated {
+                    if self?.cancelReason == nil { self?.cancelReason = "The take was stopped." }
+                }
+            }
+            source.resume()
+            signalSources.append(source)
         }
     }
 
@@ -339,6 +366,11 @@ private final class Take {
         let line = Data("[capture-director] \(job.id): \(text)\n".utf8)
         logFile?.write(line)
         FileHandle.standardError.write(line)
+    }
+
+    /// A Cocoa screen point (bottom-left origin) in global points with a top-left origin.
+    private static func topLeft(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - p.y)
     }
 
     /// The main display's area outside the menu bar and Dock, in global points with a top-left origin.

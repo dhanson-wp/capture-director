@@ -37,20 +37,28 @@ final class TargetApp {
 
     var pid: pid_t { launched?.processIdentifier ?? 0 }
 
-    /// Quits every running copy except the recorder itself, politely and then by force after 5 s.
-    func quitRunningCopies() async {
+    /// Quits every running copy except the recorder itself, politely only (Ruling I): a copy
+    /// still running after 5 s may hold unsaved work, so the take stops instead of force-quitting it.
+    func quitRunningCopies() async throws {
         let selfPid = ProcessInfo.processInfo.processIdentifier
         let apps = NSWorkspace.shared.runningApplications
         let running = apps.map { RunningApp(pid: $0.processIdentifier, bundleId: $0.bundleIdentifier) }
         relaunchAfter = shouldRelaunchAfter(running: running, bundleId: bundleId, selfPid: selfPid)
         let pids = Set(instancesToQuit(running: running, bundleId: bundleId, selfPid: selfPid))
-        await Self.quit(apps.filter { pids.contains($0.processIdentifier) })
+        let copies = apps.filter { pids.contains($0.processIdentifier) }
+        for app in copies { app.terminate() }
+        await Self.waitUntilGone(copies, seconds: 5)
+        if copies.contains(where: { !$0.isTerminated }) {
+            // Nothing was quit by force, so there's nothing to reopen.
+            relaunchAfter = false
+            throw RecorderError("Quit \(name) first, then record again.")
+        }
     }
 
     /// Launches a new copy with the job's environment.
     func launch(env: [String: String]) async throws {
         let config = NSWorkspace.OpenConfiguration()
-        config.environment = env
+        config.environment = Self.environment(merging: env)
         config.createsNewApplicationInstance = true
         config.activates = true
         config.addsToRecentItems = false
@@ -111,10 +119,21 @@ final class TargetApp {
             let config = NSWorkspace.OpenConfiguration()
             config.activates = false
             config.addsToRecentItems = false
+            // A new instance, or LaunchServices may just activate the recorder when the target is Capture Director.
+            config.createsNewApplicationInstance = true
             _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
         }
     }
 
+    /// Ruling J: the recorder's own environment, minus LaunchServices' per-process keys,
+    /// with the job's values on top. Correct whether LaunchServices adds or replaces.
+    static func environment(merging job: [String: String]) -> [String: String] {
+        ProcessInfo.processInfo.environment
+            .filter { !$0.key.hasPrefix("__CF") && !$0.key.hasPrefix("XPC_") }
+            .merging(job) { _, mine in mine }
+    }
+
+    /// Quits a copy this take launched: politely, then by force after 5 s.
     private static func quit(_ apps: [NSRunningApplication]) async {
         guard !apps.isEmpty else { return }
         for app in apps { app.terminate() }

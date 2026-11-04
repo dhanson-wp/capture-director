@@ -169,6 +169,13 @@ final class InputDriver {
     private var lastPosition: CGPoint?
     private var buttonDown = false
     private var heldModifiers: [CGKeyCode] = []
+    private var heldKey: (code: CGKeyCode, flags: CGEventFlags)?
+    /// Recently posted pointer positions and key codes with their host times. The cancel
+    /// monitor runs on the main actor too, so it sees a move only after later ones were posted.
+    private var recentPositions: [(time: Double, point: CGPoint)] = []
+    private var recentKeys: [(time: Double, code: CGKeyCode)] = []
+    private static let recentWindow = 0.25
+    private static let recentLimit = 64
 
     init() {
         source = CGEventSource(stateID: .hidSystemState)
@@ -177,12 +184,19 @@ final class InputDriver {
         source?.localEventsSuppressionInterval = 0
     }
 
-    /// True for events this driver posted: they carry the marker, or (if the system
-    /// coalesced a mouse move and dropped it) they land exactly where the driver put the pointer.
-    func posted(_ event: CGEvent) -> Bool {
-        if event.getIntegerValueField(.eventSourceUserData) == Self.marker { return true }
-        guard let last = lastPosition else { return false }
-        return hypot(event.location.x - last.x, event.location.y - last.y) < 1
+    /// True for events this driver posted: they carry the marker, or (when the marker is
+    /// missing or there's no CGEvent) a pointer event lands within 1 pt of a position posted
+    /// in the last 250 ms, or a key event repeats a key code posted in that time.
+    /// `location` is in global points with a top-left origin; `keyCode` is set for key events.
+    func posted(_ event: CGEvent?, location: CGPoint, keyCode: CGKeyCode?) -> Bool {
+        if event?.getIntegerValueField(.eventSourceUserData) == Self.marker { return true }
+        let since = CACurrentMediaTime() - Self.recentWindow
+        if let keyCode {
+            return recentKeys.contains { $0.time >= since && $0.code == keyCode }
+        }
+        var points = recentPositions.filter { $0.time >= since }.map(\.point)
+        if let lastPosition { points.append(lastPosition) }
+        return points.contains { hypot(location.x - $0.x, location.y - $0.y) < 1 }
     }
 
     /// Moves the pointer to a screen point (global, top-left origin).
@@ -190,6 +204,8 @@ final class InputDriver {
         post(CGEvent(mouseEventSource: source, mouseType: buttonDown ? .leftMouseDragged : .mouseMoved,
                      mouseCursorPosition: point, mouseButton: .left))
         lastPosition = point
+        recentPositions.append((CACurrentMediaTime(), point))
+        if recentPositions.count > Self.recentLimit { recentPositions.removeFirst(recentPositions.count - Self.recentLimit) }
     }
 
     func mouseDown(at point: CGPoint) {
@@ -214,10 +230,12 @@ final class InputDriver {
             heldModifiers.append(modifier)
         }
         postKey(chord.key, down: true, flags: chord.flags)
+        heldKey = (chord.key, chord.flags)
     }
 
     func keyUp(_ chord: KeyChord) {
         postKey(chord.key, down: false, flags: chord.flags)
+        heldKey = nil
         releaseModifiers()
     }
 
@@ -235,6 +253,7 @@ final class InputDriver {
                 event?.flags = []
                 event?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
                 post(event)
+                rememberKey(0)
             }
         }
     }
@@ -248,6 +267,8 @@ final class InputDriver {
     func releaseAll() {
         if buttonDown, let point = lastPosition ?? CGEvent(source: nil)?.location { mouseUp(at: point) }
         buttonDown = false
+        if let heldKey { postKey(heldKey.code, down: false, flags: heldKey.flags) }
+        heldKey = nil
         releaseModifiers()
     }
 
@@ -264,6 +285,12 @@ final class InputDriver {
         let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
         event?.flags = flags
         post(event)
+        rememberKey(code)
+    }
+
+    private func rememberKey(_ code: CGKeyCode) {
+        recentKeys.append((CACurrentMediaTime(), code))
+        if recentKeys.count > Self.recentLimit { recentKeys.removeFirst(recentKeys.count - Self.recentLimit) }
     }
 
     private func post(_ event: CGEvent?) {
