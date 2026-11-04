@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { loadShots } from '../src/shots.js';
+import { loadShots, processShot } from '../src/shots.js';
+import { probe } from '../src/util.js';
 
 const BUNDLE = 'io.github.dhanson-wp.capture-director';
 
@@ -106,4 +108,39 @@ test('countdown, recordFps, and settle are checked numbers', async () => {
 	assert.equal(shots[0].countdown, 0);
 	assert.equal(shots[0].recordFps, 30);
 	assert.equal(shots[0].settle, 100);
+});
+
+// A shot folder holding a 3840x2160 video and a capture.json that points at it.
+async function videoShot(source = 'raw.mov', { makeVideo = true } = {}) {
+	const { dir, shots } = await load(`app: ${BUNDLE}`);
+	const [shot] = shots;
+	shot.cursor.enabled = false;
+	if (makeVideo) {
+		const made = spawnSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=3840x2160:rate=10', '-t', '3', '-pix_fmt', 'yuv420p', path.join(dir, 'raw.mov')]);
+		assert.equal(made.status, 0, String(made.stderr));
+	}
+	await writeFile(path.join(dir, 'capture.json'), JSON.stringify({
+		source,
+		viewport: { width: 1920, height: 1080 },
+		duration: 3,
+		cursorStart: [960, 540],
+		events: [{ type: 'click', t: 1, x: 960, y: 540, zoom: 1.5 }],
+		moves: [],
+		presses: [],
+	}));
+	return { dir, shot };
+}
+
+test('processShot reads a video source', async () => {
+	const { dir, shot } = await videoShot();
+	const result = await processShot(null, shot, dir);
+	const info = await probe(result.file);
+	assert.equal(info.width, 1920);
+	assert.equal(info.height, 1080);
+	assert.ok(Math.abs(info.duration - 3) < 0.3, `duration ${info.duration}`);
+});
+
+test('source must be a plain file name', async () => {
+	const { dir, shot } = await videoShot('../x.mov', { makeVideo: false });
+	await assert.rejects(processShot(null, shot, dir), /source must be a plain file name/);
 });

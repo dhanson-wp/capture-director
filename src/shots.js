@@ -146,7 +146,12 @@ export async function processShot(browser, shot, dir) {
 	const cap = JSON.parse(await readFile(capPath, 'utf8'));
 	// capture.json lands in the filter graph, so check it as carefully as the YAML.
 	cap.duration = finite(cap.duration, `${shot.id} capture duration`, { min: 0 });
-	const first = await probe(path.join(dir, 'frames', '000000.jpg'));
+	// App shots carry a recorded video; web shots carry a frame list.
+	if (cap.source !== undefined && !(typeof cap.source === 'string' && /^[\w.-]+$/.test(cap.source))) {
+		throw new Error(`${shot.id}: source must be a plain file name`);
+	}
+	const video = cap.source ? path.join(dir, cap.source) : null;
+	const first = await probe(video ?? path.join(dir, 'frames', '000000.jpg'));
 	const W = first.width;
 	const H = first.height;
 	const k = W / cap.viewport.width; // CSS px to device px
@@ -159,9 +164,9 @@ export async function processShot(browser, shot, dir) {
 	const zoom = zoomFilter(plan, { W, H, fps });
 
 	// Safe mode (the default) only accepts plain relative names, which is all the recorder writes.
-	const inputs = ['-f', 'concat', '-i', path.join(dir, 'frames', 'list.ffconcat')];
-	// The concat demuxer can run long on the held last frame, so trim to the real length.
-	const chain = [`[0:v]fps=${fps},trim=duration=${cap.duration},setpts=PTS-STARTPTS,format=yuv420p[b0]`];
+	const inputs = video ? ['-i', video] : ['-f', 'concat', '-i', path.join(dir, 'frames', 'list.ffconcat')];
+	// The concat demuxer can run long on the held last frame, so trim to the real length. A video already has its real length.
+	const chain = [`[0:v]fps=${fps},${video ? '' : `trim=duration=${cap.duration},`}setpts=PTS-STARTPTS,format=yuv420p[b0]`];
 	let last = 'b0';
 
 	if (shot.cursor.enabled) {
