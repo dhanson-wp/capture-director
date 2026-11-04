@@ -275,7 +275,7 @@ private final class Take {
     /// Escape, or any pointer movement the recorder didn't make, stops the take.
     private func startWatching() throws {
         guard watch.start() else {
-            throw RecorderError("I couldn't watch the mouse and keyboard, so I can't record safely. Check Accessibility permission for Capture Director.")
+            throw RecorderError("Capture Director couldn't watch the mouse and keyboard, so it can't tell when to stop the take. Check its Accessibility permission, then record again.")
         }
         watching = true
     }
@@ -295,8 +295,12 @@ private final class Take {
         }
     }
 
+    private func logWatchNotes() {
+        for note in watch.takeNotes() { log(note) }
+    }
+
     private func checkCancel() throws {
-        if let note = watch.takeFirstEventNote() { log(note) }
+        logWatchNotes()
         if cancelReason == nil { cancelReason = watch.cancelReason }
         if let cancelReason { throw Cancelled(message: cancelReason) }
     }
@@ -324,6 +328,7 @@ private final class Take {
         input.releaseAll()
         if watching { watch.stop() }
         watching = false
+        logWatchNotes()
         if let recorder {
             await recorder.stop()
             if !ok { recorder.cancel() }

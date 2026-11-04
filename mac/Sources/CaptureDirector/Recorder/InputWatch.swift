@@ -7,8 +7,8 @@ import Foundation
 /// (0 for hardware) and the recorder's marker; an NSEvent global monitor only sees a
 /// rebuilt copy without either, whose location isn't in screen coordinates.
 ///
-/// The tap runs on its own thread so a slow Accessibility call on the main thread
-/// never holds up the Mac's input. It passes every event through unchanged.
+/// The tap is listen-only: it can't hold up or change the Mac's input, even if it stalls
+/// or Accessibility is revoked mid-take. It runs on its own thread all the same.
 nonisolated final class InputWatch: @unchecked Sendable {
     private let lock = NSLock()
     private let selfPid = Int64(ProcessInfo.processInfo.processIdentifier)
@@ -17,6 +17,8 @@ nonisolated final class InputWatch: @unchecked Sendable {
     private var verdict: InputVerdict?
     private var firstEvent: String?
     private var firstEventTaken = false
+    private var cancelEvent: String?
+    private var cancelEventTaken = false
 
     /// Starts watching. Returns false when macOS won't allow the tap.
     func start() -> Bool {
@@ -25,7 +27,7 @@ nonisolated final class InputWatch: @unchecked Sendable {
         let thread = Thread { [self] in
             let types: [CGEventType] = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .keyDown]
             let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
-            guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+            guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
                                               eventsOfInterest: mask, callback: Self.callback,
                                               userInfo: Unmanaged.passUnretained(self).toOpaque()),
                   let source = CFMachPortCreateRunLoopSource(nil, tap, 0) else {
@@ -50,16 +52,16 @@ nonisolated final class InputWatch: @unchecked Sendable {
     }
 
     func stop() {
-        let (tap, loop) = lock.withLock { (self.tap, self.loop) }
+        // Cleared first, so a late tapDisabled callback finds no tap to turn back on.
+        let (tap, loop) = lock.withLock {
+            defer { self.tap = nil; self.loop = nil }
+            return (self.tap, self.loop)
+        }
         if let tap {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
         }
         if let loop { CFRunLoopStop(loop) }
-        lock.withLock {
-            self.tap = nil
-            self.loop = nil
-        }
     }
 
     /// Why the take should stop, if something other than the recorder moved the mouse or pressed Escape.
@@ -71,12 +73,20 @@ nonisolated final class InputWatch: @unchecked Sendable {
         }
     }
 
-    /// A one-time description of the first event the tap saw, for recorder.log.
-    func takeFirstEventNote() -> String? {
+    /// Notes for recorder.log not yet handed out: the first event the tap saw, and the
+    /// event that stopped the take. Each is returned once.
+    func takeNotes() -> [String] {
         lock.withLock {
-            guard !firstEventTaken, let firstEvent else { return nil }
-            firstEventTaken = true
-            return firstEvent
+            var notes: [String] = []
+            if !firstEventTaken, let firstEvent {
+                firstEventTaken = true
+                notes.append("first input event seen: " + firstEvent)
+            }
+            if !cancelEventTaken, let cancelEvent {
+                cancelEventTaken = true
+                notes.append("the take stopped on input event: " + cancelEvent)
+            }
+            return notes
         }
     }
 
@@ -91,13 +101,15 @@ nonisolated final class InputWatch: @unchecked Sendable {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let judged = judgeInput(isKey: isKey, keyCode: keyCode, sourcePid: sourcePid, userData: userData,
                                 selfPid: selfPid, marker: InputDriver.marker)
+        let p = event.location
+        let note = "\(isKey ? "key \(keyCode)" : "pointer") from pid \(sourcePid) (ours is \(selfPid)), "
+            + "marker \(userData) (ours is \(InputDriver.marker)), at \(Int(p.x.rounded())),\(Int(p.y.rounded())), judged \(judged)"
         lock.withLock {
-            if firstEvent == nil {
-                let p = event.location
-                firstEvent = "first input event seen: \(isKey ? "key \(keyCode)" : "pointer") from pid \(sourcePid) (ours is \(selfPid)), "
-                    + "marker \(userData) (ours is \(InputDriver.marker)), at \(Int(p.x.rounded())),\(Int(p.y.rounded())), judged \(judged)"
+            if firstEvent == nil { firstEvent = note }
+            if verdict == nil, judged == .escape || judged == .userMoved {
+                verdict = judged
+                cancelEvent = note
             }
-            if verdict == nil, judged == .escape || judged == .userMoved { verdict = judged }
         }
     }
 
