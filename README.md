@@ -14,7 +14,7 @@ Here's what it made from one shot list and one timeline: a 31 second tour of the
 - Node 20 or newer
 - Google Chrome (it drives the installed Chrome through Playwright, so there's no browser download)
 - To record a Mac app, the Mac app installed (see below) and macOS 26 or later
-- ffmpeg with libx264 (`brew install ffmpeg`)
+- ffmpeg 7 or later with libx264 (`brew install ffmpeg`)
 
 ```bash
 git clone https://github.com/dhanson-wp/capture-director.git
