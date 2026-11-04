@@ -9,22 +9,25 @@ shots:
     env:
       CD_HOME: /tmp/capture-director-tour-home
     background: "#4c1637"
+    # Zoom on hovers only, so clicks stay at full frame.
+    zoom: { on: [hover] }
     actions:
       - wait: 1200
-      - click: { id: sidebar.folder.Blog, zoom: 1.5, hold: 1000 }
+      - hover: { id: sidebar.folder.Blog, zoom: 1.5, hold: 700 }
+      - click: { id: sidebar.folder.Blog, hold: 600 }
       - wait: 600
-      - click: { id: sidebar.starred, zoom: false, hold: 900 }
+      - click: { id: sidebar.starred, hold: 900 }
       - wait: 600
-      - click: { id: sidebar.all, zoom: false, hold: 900 }
+      - click: { id: sidebar.all, hold: 900 }
       - wait: 500
-      # Only the Blog click and the inspector hover zoom; the rest set zoom: false.
+      # Only hovers zoom (shot-level zoom.on): the Blog folder and the inspector.
       # Play the first capture: select it, then the app's Play shortcut.
-      - click: { id: grid.item.0, zoom: false, hold: 500 }
+      - click: { id: grid.item.0, hold: 500 }
       - press: cmd+o
       - wait: 3000
-      - click: { id: player.close, zoom: false, hold: 600 }
+      - click: { id: player.close, hold: 600 }
       - wait: 500
-      - click: { id: grid.item.0, zoom: false, hold: 500 }
+      - click: { id: grid.item.0, hold: 500 }
       # Control-Command-I shows the inspector, which starts hidden.
       - press: ctrl+cmd+i
       - wait: 700
