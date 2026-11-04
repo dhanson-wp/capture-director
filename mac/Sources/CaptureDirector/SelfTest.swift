@@ -202,7 +202,8 @@ enum SelfTest {
         }
 
         b.selection = [gallery.id]
-        check("one selected capture shows its details", InspectorMode.of(model.selectedEntries()) == .one(gallery))
+        check("one selected capture shows its details", InspectorMode.of(model.selectedEntries()) == .one(gallery),
+              "item \(b.item), search \(b.search), selected \(model.selectedEntries().map(\.title)), expected \(gallery.title)")
         b.selection = Set(entries.prefix(3).map(\.id))
         check("three selected show as several, in screen order",
               InspectorMode.of(model.selectedEntries()) == .several(Array(entries.prefix(3))))

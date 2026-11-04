@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,9 @@ import { loadShots, processShot } from '../src/shots.js';
 import { probe } from '../src/util.js';
 
 const BUNDLE = 'io.github.dhanson-wp.capture-director';
+
+// processShot registers its output. Keep synthetic recordings out of the user's library.
+process.env.CD_HOME = await mkdtemp(`${tmpdir()}/cd-app-library-`);
 
 // Write a one-shot YAML file and load it. `body` is the shot's YAML, indented under "shots:".
 async function load(body) {
@@ -162,6 +165,8 @@ test('processShot reads a video source', async () => {
 	assert.equal(info.width, 1920);
 	assert.equal(info.height, 1080);
 	assert.ok(Math.abs(info.duration - 3) < 0.3, `duration ${info.duration}`);
+	const library = JSON.parse(await readFile(path.join(process.env.CD_HOME, 'library.json'), 'utf8'));
+	assert.ok(library.entries.some((entry) => entry.file === result.file));
 });
 
 test('source must be a plain file name', async () => {

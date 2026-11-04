@@ -23,6 +23,18 @@ npm install
 npm link   # optional, puts capture-director on your PATH
 ```
 
+If you skip `npm link`, use `node /absolute/path/to/capture-director/bin/capture-director.js` wherever the commands below say `capture-director`.
+
+To check your setup with the included website example:
+
+```bash
+node bin/capture-director.js record examples/blog-tour/shots.yaml
+node bin/capture-director.js render examples/blog-tour/timeline.yaml
+node bin/capture-director.js sheet examples/blog-tour/out/blog-tour.mp4
+```
+
+Run these from the repo folder. The final video is `examples/blog-tour/out/blog-tour.mp4`; the contact sheet is beside it. This example uses a live website, so its selectors may need updating if the site changes. Your own shot lists and videos should live in a separate project folder.
+
 ## How it works
 
 1. **Record.** Playwright opens a fresh, logged-out Chrome at your viewport (1440x810 by default) with Chrome itself running at a 4/3 scale factor, so every frame is 1920x1080 device pixels. The CDP screencast saves every compositor frame as a JPEG (quality 95) with its real timestamp, which comes out at 60 fps while anything on the page is moving. Playwright's `recordVideo` is softer, so it isn't used.
