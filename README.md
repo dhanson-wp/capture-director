@@ -101,7 +101,7 @@ shots:
       - press: ctrl+cmd+i
 ```
 
-The full tour is in `examples/mac-app-tour/`. `make-demo-library.sh` fills a scratch library so the app has something to show, and `env` points the app at it, so the tour never touches `~/.capture-director`. Relative `env` values that start with `./` or `../` resolve from the YAML file's folder.
+The full tour is in `examples/mac-app-tour/`. `make-demo-library.sh` fills a scratch library so the app has something to show, and `env` points the app at it, so the tour never touches `~/.capture-director`. The inspector starts hidden, so the tour presses Control-Command-I to show it. Relative `env` values that start with `./` or `../` resolve from the YAML file's folder.
 
 The app is recorded at 3840x2160 on the solid color, and then the usual zoom and cursor step turns that into a 1080p clip. The window is about 80 percent of the frame width, with its macOS shadow.
 
@@ -113,15 +113,13 @@ A target is how a step finds a control through the app's accessibility tree. Use
 
 ```yaml
 - click: { id: sidebar.starred }                 # accessibility identifier
-- click: { role: button, label: "Add folder" }   # role plus label
-- click: "Add folder"                            # a bare label, any role
+- click: { role: button, label: "New folder" }   # role plus label
+- click: "New folder"                            # a bare label, any role
 ```
 
 An `id` is the sturdiest, since it doesn't change with the app's wording. If you build the app yourself, set the accessibility identifier on the controls you plan to film.
 
 Shot options that only make sense for a web page (`scale`, `hideScrollbars`, `setup`, `viewport`, `css`, `hide`, and `waitUntil`) are rejected on an app shot, by name. Per-step `zoom: false` isn't supported on app shots yet. To zoom only on hovers and leave clicks at full frame, set `zoom: { on: [hover] }` on the shot, as the tour does.
-
-One tip for the Capture Director tour: the inspector starts hidden, so the tour presses Control-Command-I to show it.
 
 ### Permissions
 
@@ -343,7 +341,7 @@ npm test            # the CLI
 mac/tools/test.sh   # the Mac app's unit tests
 ```
 
-The tests cover the zoom planner, app shot parsing,, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules. The Mac app has its own Swift tests. GitHub Actions runs them on Node 20 and 22 for every pull request and every push to `main`.
+The tests cover the zoom planner, app shot parsing, step parsing, a check that the generated ffmpeg expressions parse, the input checks that keep YAML out of the filter graph, and the library server's access rules. The Mac app has its own Swift tests. GitHub Actions runs them on Node 20 and 22 for every pull request and every push to `main`.
 
 ## License
 
